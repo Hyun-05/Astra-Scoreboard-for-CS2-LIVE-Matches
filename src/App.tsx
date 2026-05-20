@@ -63,9 +63,22 @@ export default function App() {
         useAppStore.getState().updatePlayers(players);
       }
 
-      // 同步小比分（mapScore）
+      // 同步队名 & 小比分
       if (data.map) {
         const state = useAppStore.getState();
+
+        // 队名：过滤默认占位符 "CT" / "T"
+        const ctName = data.map.team_ct?.name?.trim();
+        const tName = data.map.team_t?.name?.trim();
+
+        if (ctName && ctName.toUpperCase() !== 'CT') {
+          state.setTeamName('left', ctName);
+        }
+        if (tName && tName.toUpperCase() !== 'T') {
+          state.setTeamName('right', tName);
+        }
+
+        // 小比分（mapScore）
         if (data.map.team_ct?.score !== undefined) {
           state.setMapScore('left', data.map.team_ct.score);
         }

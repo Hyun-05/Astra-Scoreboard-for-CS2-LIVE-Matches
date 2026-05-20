@@ -78,16 +78,31 @@ function recalcDisplayAdr() {
 }
 
 function writeScoreTxt() {
+  if (!store.get('scoreTxtEnabled', false)) return;
   const now = Date.now();
   if (now - lastTxtWrite < TXT_WRITE_INTERVAL) return;
   lastTxtWrite = now;
+
   const defaultDir = path.join(app.getPath('userData'), 'scores');
-  const txtDir = store.get('scoreTxtDir', defaultDir);  const txtPath = path.join(txtDir, 'score.txt');
+  const txtDir = store.get('scoreTxtDir', defaultDir);
+  
   if (!fs.existsSync(txtDir)) fs.mkdirSync(txtDir, { recursive: true });
+  
+  const txtPath = path.join(txtDir, 'score.txt');
   const content = `${obsState.teamLeft.score} : ${obsState.teamRight.score}`;
   fs.writeFileSync(txtPath, content, 'utf8');
+  
   const simplePath = path.join(txtDir, 'simple.txt');
   fs.writeFileSync(simplePath, `${obsState.teamLeft.score}:${obsState.teamRight.score}`, 'utf8');
+}
+function writeTeamNameTxt() {
+  const defaultDir = path.join(app.getPath('userData'), 'scores');
+  const txtDir = store.get('scoreTxtDir', defaultDir);
+  
+  if (!fs.existsSync(txtDir)) fs.mkdirSync(txtDir, { recursive: true });
+  
+  fs.writeFileSync(path.join(txtDir, 'teamname1.txt'), obsState.teamLeft.name, 'utf8');
+  fs.writeFileSync(path.join(txtDir, 'teamname2.txt'), obsState.teamRight.name, 'utf8');
 }
 
 function startGsiServer() {
@@ -102,6 +117,7 @@ function startGsiServer() {
           obsState.gsiConnected = true; 
 
           if (data.map) {
+            console.log('>>> GSI map data:', JSON.stringify(data.map, null, 2));
             obsState.mapName = data.map.name || obsState.mapName;
             obsState.round = data.map.round || 0;
 
@@ -111,19 +127,19 @@ function startGsiServer() {
             // ========== 1. 新地图检测（gameover → live/warmup）==========
             if (lastMapPhase === 'gameover' && (mapPhase === 'live' || mapPhase === 'warmup')) {
               console.log('>>> New map detected via GSI');
-              
-              // 清掉上一场 MVP，进入"未显示"状态
+
+              // 新地图单局比分归零（GSI 会立即推送新值覆盖）
+              obsState.teamLeft.mapScore = 0;
+              obsState.teamRight.mapScore = 0;
+
+              // 清掉上一场 MVP
               obsState.showMvp = false;
               obsState.mvp = null;
               store.set('showMvp', false);
               store.delete('mvp');
-              
+
               // 重置 ADR 追踪器
               resetAdrTracker();
-              
-              // 重置队伍名回默认（可选，如果你不想保留上一场的自定义队名）
-              // obsState.teamLeft.name = 'CT TEAM';
-              // obsState.teamRight.name = 'T TEAM';
             }
 
             // ========== 2. 回合切换检测（锁定 ADR）==========
@@ -343,6 +359,9 @@ function startObsServer() {
     } else if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(generateObsHtml());
+    } else if (req.url === '/name1' || req.url === '/name2') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(generateNameHtml());
     } else {
       res.writeHead(404);
       res.end();
@@ -862,6 +881,90 @@ function generateObsHtml() {
 </html>`;
 }
 
+function generateNameHtml() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Quantico:wght@700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    overflow: hidden;
+  }
+  .name-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    font-size: 200px;
+    line-height: 1;
+  }
+  /* 底层：纯黑色 12px 轮廓 */
+  .name-stroke {
+    position: absolute;
+    font-family: 'Quantico', sans-serif;
+    font-weight: 700;
+    -webkit-text-stroke: 12px black;
+    color: transparent;
+    pointer-events: none;
+  }
+  /* 上层：白到灰渐变填充 */
+  .name-fill {
+    position: relative;
+    font-family: 'Quantico', sans-serif;
+    font-weight: 700;
+    background: linear-gradient(180deg, #FFFFFF 0%, #A8A8A8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+</style>
+</head>
+<body>
+<div class="name-box" id="box">
+  <div class="name-stroke" id="stroke">TEAM</div>
+  <div class="name-fill" id="fill">TEAM</div>
+</div>
+<script>
+  const isLeft = location.pathname === '/name1';
+  const box = document.getElementById('box');
+  const stroke = document.getElementById('stroke');
+  const fill = document.getElementById('fill');
+
+  function fit() {
+    const parent = box.parentElement;
+    let size = 300;
+    box.style.fontSize = size + 'px';
+    while (size > 10 && (box.scrollWidth > parent.clientWidth || box.scrollHeight > parent.clientHeight)) {
+      size -= 2;
+      box.style.fontSize = size + 'px';
+    }
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch('/api/state');
+      const d = await r.json();
+      const newName = isLeft ? d.teamLeft.name : d.teamRight.name;
+      if (fill.textContent !== newName) {
+        fill.textContent = newName;
+        stroke.textContent = newName;
+        fit();
+      }
+    } catch(e) {}
+  }
+
+  window.addEventListener('load', () => { tick(); });
+  window.addEventListener('resize', fit);
+  setInterval(tick, 500);
+</script>
+</body>
+</html>`;
+}
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1620,
@@ -925,8 +1028,9 @@ app.whenReady().then(() => {
   obsState.bgImgOpacity = store.get('bgImgOpacity', 0.3);
   const savedColors = store.get('colors');
   if (savedColors) obsState.colors = savedColors;
-  const scoreDir = store.get('scoreTxtDir', path.join(app.getPath('userData'), 'scores'));
+  const scoreDir = store.get('scoreTxtDir', path.join(app.getPath('documents'), 'Astra Scoreboard', 'scores'));
   if (!fs.existsSync(scoreDir)) fs.mkdirSync(scoreDir, { recursive: true });
+  writeTeamNameTxt();
   createWindow();
   startGsiServer();
   startObsServer();
@@ -996,6 +1100,14 @@ ipcMain.handle('auto-config-gsi', async () => {
     return { success: false, message: ' Fail: ' + err.message };
   }
 });
+ipcMain.handle('toggle-score-txt', (event, enabled) => {
+  store.set('scoreTxtEnabled', enabled);
+  return true;
+});
+
+ipcMain.handle('get-score-txt-enabled', () => {
+  return store.get('scoreTxtEnabled', false);
+});
 ipcMain.handle('select-score-dir', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: 'Select folder for score.txt output',
@@ -1019,9 +1131,12 @@ ipcMain.handle('update-obs-state', (_, newState) => {
   const oldLeftMapScore = obsState.teamLeft.mapScore;
   const oldRightMapScore = obsState.teamRight.mapScore;
 
-  if (newState.teamLeft?.name !== undefined && newState.teamLeft.name !== 'CT TEAM') 
+  const oldLeftName = obsState.teamLeft.name;
+  const oldRightName = obsState.teamRight.name;
+
+  if (newState.teamLeft?.name !== undefined) 
     obsState.teamLeft.name = newState.teamLeft.name;
-  if (newState.teamRight?.name !== undefined && newState.teamRight.name !== 'T TEAM') 
+  if (newState.teamRight?.name !== undefined) 
     obsState.teamRight.name = newState.teamRight.name;
   if (typeof newState.teamLeft?.score === 'number') obsState.teamLeft.score = newState.teamLeft.score;
   if (typeof newState.teamRight?.score === 'number') obsState.teamRight.score = newState.teamRight.score;
@@ -1057,6 +1172,9 @@ ipcMain.handle('update-obs-state', (_, newState) => {
   }
 
   writeScoreTxt();
+  if (obsState.teamLeft.name !== oldLeftName || obsState.teamRight.name !== oldRightName) {
+  writeTeamNameTxt();
+  }
   return true;
 });
 

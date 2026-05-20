@@ -11,6 +11,8 @@ interface AppState {
   addScore: (side: 'left' | 'right') => void;
   subScore: (side: 'left' | 'right') => void;
   swapScores: () => void;
+  swapTeamNames: () => void;
+  resetTeamNames: () => void;
   resetMatch: () => void;
   setMapScore: (side: 'left' | 'right', score: number) => void;
   mvp: { name: string; steamid: string; team: 'CT' | 'T'; kd: number } | null;
@@ -110,6 +112,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       },
     }));
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { name: newMatch.teamLeft.name },
+      teamRight: { name: newMatch.teamRight.name },
+    });
+    
   },
 
   addScore: (side) => {
@@ -142,8 +150,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     const teamName = isLeft ? state.match.teamLeft.name : state.match.teamRight.name;
     get().addToast(`${teamName} +1`, 'success');
     get().addLog(`${teamName} win Map ${state.match.currentMap} `, 'success');
+
+        const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { score: newMatch.teamLeft.score },
+      teamRight: { score: newMatch.teamRight.score },
+      matchOver: newMatch.matchOver,
+      winner: newMatch.winner,
+      currentMap: newMatch.currentMap,
+    });
   },
 
+  
   subScore: (side) => {
     const isLeft = side === 'left';
     set(s => ({
@@ -158,6 +176,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       },
     }));
     get().addLog(`${isLeft ? 'Left team' : 'Right team'}Score -1`, 'warning');
+
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { score: newMatch.teamLeft.score },
+      teamRight: { score: newMatch.teamRight.score },
+      matchOver: newMatch.matchOver,
+      winner: newMatch.winner,
+          });
   },
 
   swapScores: () => {
@@ -172,8 +198,57 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       };
     });
-    get().addToast('Big score channged', 'info');
-    get().addLog('Big score channged', 'info');
+
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { score: newMatch.teamLeft.score },
+      teamRight: { score: newMatch.teamRight.score },
+    });
+
+    get().addToast('Series score swapped', 'info');
+    get().addLog('Series score swapped', 'info');
+  },
+
+  swapTeamNames: () => {
+    set(s => {
+      const leftName = s.match.teamLeft.name;
+      const rightName = s.match.teamRight.name;
+      return {
+        match: {
+          ...s.match,
+          teamLeft: { ...s.match.teamLeft, name: rightName },
+          teamRight: { ...s.match.teamRight, name: leftName },
+        },
+      };
+    });
+
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { name: newMatch.teamLeft.name },
+      teamRight: { name: newMatch.teamRight.name },
+    });
+
+    get().addToast('Team names swapped', 'info');
+    get().addLog('Team names swapped', 'info');
+  },
+
+  resetTeamNames: () => {
+    set(s => ({
+      match: {
+        ...s.match,
+        teamLeft: { ...s.match.teamLeft, name: 'CT TEAM' },
+        teamRight: { ...s.match.teamRight, name: 'T TEAM' },
+      },
+    }));
+
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { name: newMatch.teamLeft.name },
+      teamRight: { name: newMatch.teamRight.name },
+    });
+
+    get().addToast('Team names reset to default', 'info');
+    get().addLog('Team names reset to default', 'info');
   },
 
   resetMatch: () => {
@@ -188,6 +263,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     get().addToast('—— Match reset ——', 'warning');
     get().addLog('—— Match reset ——', 'warning');
+
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { score: newMatch.teamLeft.score, mapScore: newMatch.teamLeft.mapScore },
+      teamRight: { score: newMatch.teamRight.score, mapScore: newMatch.teamRight.mapScore },
+      matchOver: newMatch.matchOver,
+      winner: newMatch.winner,
+      currentMap: newMatch.currentMap,
+    });
   },
 
   setMapScore: (side, score) => {
@@ -201,6 +285,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       },
     }));
+    const newMatch = get().match;
+    (window as any).electronAPI?.updateObsState?.({
+      teamLeft: { mapScore: newMatch.teamLeft.mapScore },
+      teamRight: { mapScore: newMatch.teamRight.mapScore },
+    });
   },
 
   hotkeys: { ...defaultHotkeys },
@@ -337,7 +426,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
-    hotkeysEnabled: localStorage.getItem('hotkeysEnabled') !== 'false', // 默认 true
+    hotkeysEnabled: localStorage.getItem('hotkeysEnabled') === 'true', // 默认 false
   setHotkeysEnabled: (enabled) => {
     localStorage.setItem('hotkeysEnabled', String(enabled));
     set({ hotkeysEnabled: enabled });

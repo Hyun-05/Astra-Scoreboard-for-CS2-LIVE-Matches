@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Check } from 'lucide-react';
+import { Settings, Check, Undo2 } from 'lucide-react';   // ← 新增 Undo2
 
 export default function MatchConfig() {
   const [isOpen, setIsOpen] = useState(false);
   const match = useAppStore(s => s.match);
   const setFormat = useAppStore(s => s.setFormat);
   const setTeamName = useAppStore(s => s.setTeamName);
+  const resetTeamNames = useAppStore(s => s.resetTeamNames);   // ← 新增
 
   const [leftName, setLeftName] = useState(match.teamLeft.name);
   const [rightName, setRightName] = useState(match.teamRight.name);
@@ -16,6 +17,12 @@ export default function MatchConfig() {
     setTeamName('left', leftName);
     setTeamName('right', rightName);
     useAppStore.getState().addToast('Name updated', 'success');
+  };
+
+  const handleReset = () => {
+    resetTeamNames();
+    setLeftName('CT TEAM');
+    setRightName('T TEAM');
   };
 
   return (
@@ -84,12 +91,22 @@ export default function MatchConfig() {
                 </div>
               </div>
 
+              {/* Update Button */}
               <button
                 onClick={handleApply}
                 className="w-full py-2 rounded-lg bg-gradient-to-r from-[#00F0FF] to-[#2979FF] text-black text-sm font-bold flex items-center justify-center gap-2 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-shadow"
               >
                 <Check className="w-4 h-4" />
-                update Teamname
+                Update Teamname
+              </button>
+
+              {/* Reset Button */}
+              <button
+                onClick={handleReset}
+                className="w-full mt-2 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-[#94A3B8] hover:text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+              >
+                <Undo2 className="w-4 h-4" />
+                Reset to Default
               </button>
             </motion.div>
           </>

@@ -63,28 +63,38 @@ export default function DataPanel() {
   const ctTopAdr = ctPlayers.length ? Math.max(...ctPlayers.map(p => p.adr || 0)) : 0;
   const tTopKd = tPlayers.length ? Math.max(...tPlayers.map(p => p.kd || 0)) : 0;
   const tTopAdr = tPlayers.length ? Math.max(...tPlayers.map(p => p.adr || 0)) : 0;
+  const [scoreEnabled, setScoreEnabled] = useState(false);
   const [scoreDir, setScoreDir] = useState('');
-  const scoreTxtPath = scoreDir ? scoreDir + '\\score.txt' : '';
 
   useEffect(() => {
     const api = (window as any).electronAPI;
+    api?.getScoreTxtEnabled?.().then((v: boolean) => setScoreEnabled(v));
     api?.getScoreDir?.().then((dir: string) => setScoreDir(dir));
   }, []);
+
+  const handleToggleScore = async () => {
+    const api = (window as any).electronAPI;
+    const newVal = !scoreEnabled;
+    await api?.toggleScoreTxt?.(newVal);
+    setScoreEnabled(newVal);
+    addLog(newVal ? 'Score.txt export enabled' : 'Score.txt export disabled', 'info');
+  };
 
   const handleChangeScoreDir = async () => {
     const api = (window as any).electronAPI;
     const result = await api?.selectScoreDir?.();
     if (result?.success) {
       setScoreDir(result.path);
-      addLog(`Score output dir changed: ${result.path}`, 'success');
+      addLog(`Score output dir: ${result.path}`, 'success');
     }
   };
 
   const handleCopyScorePath = () => {
-    if (!scoreTxtPath) return;
-    navigator.clipboard.writeText(scoreTxtPath).catch(() => {});
-    addLog('Score.txt path copied', 'info');
+    if (!scoreDir) return;
+    navigator.clipboard.writeText(scoreDir).catch(() => {});
+    addLog('Output directory path copied', 'info');
   };
+
   useEffect(() => {
     syncBgConfig();
   }, [syncBgConfig]);
@@ -142,33 +152,58 @@ export default function DataPanel() {
           </button>
         </div>
       </div>
-      {/* Score.txt Output Path */}
+      {/* Text File Export */}
       <div className="liquid-glass rounded-2xl p-5">
         <h3 className="text-sm font-bold text-[#94A3B8] uppercase tracking-widest mb-3">
-          Score.txt Output
+          OBS Text Sources
         </h3>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 text-xs font-mono-data text-[#64748B] bg-black/30 px-3 py-2 rounded-lg border border-white/5 truncate">
-            {scoreTxtPath || 'Loading...'}
-          </code>
+        
+        {/* 开关 */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm text-white">Enable text file export</span>
           <button
-            onClick={handleCopyScorePath}
-            disabled={!scoreTxtPath}
-            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-[#94A3B8] hover:text-white hover:bg-white/10 transition-all disabled:opacity-30"
+            onClick={handleToggleScore}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              scoreEnabled ? 'bg-[#00F0FF]' : 'bg-gray-600'
+            }`}
           >
-            Copy Path
-          </button>
-          <button
-            onClick={handleChangeScoreDir}
-            className="px-3 py-2 rounded-lg bg-[#00F0FF]/10 border border-[#00F0FF]/20 text-sm text-[#00F0FF] hover:bg-[#00F0FF]/20 transition-all"
-          >
-            Change
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                scoreEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
           </button>
         </div>
+
+        {/* 路径设置 */}
+        {scoreEnabled && (
+          <div className="flex items-center gap-3">
+            <code className="flex-1 text-xs font-mono-data text-[#64748B] bg-black/30 px-3 py-2 rounded-lg border border-white/5 truncate">
+              {scoreDir || 'Loading...'}
+            </code>
+            <button
+              onClick={handleCopyScorePath}
+              disabled={!scoreDir}
+              className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-[#94A3B8] hover:text-white hover:bg-white/10 transition-all disabled:opacity-30"
+            >
+              Copy
+            </button>
+            <button
+              onClick={handleChangeScoreDir}
+              className="px-3 py-2 rounded-lg bg-[#00F0FF]/10 border border-[#00F0FF]/20 text-sm text-[#00F0FF] hover:bg-[#00F0FF]/20 transition-all"
+            >
+              Change
+            </button>
+          </div>
+        )}
+        
         <p className="text-xs text-[#64748B] mt-2">
-          Default: AppData folder. Set to your OBS text source directory if needed.
+          {scoreEnabled 
+            ? 'Auto-saves score.txt, teamname1.txt, teamname2.txt for OBS text sources.' 
+            : 'Turn on to export text files to a folder of your choice.'}
         </p>
       </div>
+
       {/* OBS 背景设置 */}
       <div className="liquid-glass rounded-2xl p-5">
         <h3 className="text-sm font-bold text-[#94A3B8] uppercase tracking-widest mb-4">

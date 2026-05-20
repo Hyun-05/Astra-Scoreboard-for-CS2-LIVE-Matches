@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBgConfig: () => ipcRenderer.invoke('get-bg-config'),
   autoConfigGsi: () => ipcRenderer.invoke('auto-config-gsi'),
   onGsiData: (cb) => ipcRenderer.on('gsi-data', cb),
-    selectScoreDir: () => ipcRenderer.invoke('select-score-dir'),
+  selectScoreDir: () => ipcRenderer.invoke('select-score-dir'),
   getScoreDir: () => ipcRenderer.invoke('get-score-dir'),
+  toggleScoreTxt: (enabled) => ipcRenderer.invoke('toggle-score-txt', enabled),
+  getScoreTxtEnabled: () => ipcRenderer.invoke('get-score-txt-enabled'),
 });

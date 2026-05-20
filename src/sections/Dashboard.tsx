@@ -4,12 +4,13 @@ import PlayerTable from '@/components/PlayerTable';
 import SheenButton from '@/components/SheenButton';
 import MatchConfig from '@/components/MatchConfig';
 import { motion } from 'framer-motion';
-import { ArrowLeftRight, RotateCcw, Plus, Minus } from 'lucide-react';
+import { ArrowLeftRight, RotateCcw, Plus, Minus, Type } from 'lucide-react';
 
 export default function Dashboard() {
   const addScore = useAppStore(s => s.addScore);
   const subScore = useAppStore(s => s.subScore);
   const swapScores = useAppStore(s => s.swapScores);
+  const swapTeamNames = useAppStore(s => s.swapTeamNames);
   const resetMatch = useAppStore(s => s.resetMatch);
   const match = useAppStore(s => s.match);
 
@@ -19,10 +20,10 @@ export default function Dashboard() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="h-full flex flex-col gap-6 overflow-y-auto scrollbar-thin pr-1"
+      className="h-full flex flex-col gap-5 overflow-y-auto scrollbar-thin pr-1 justify-center"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-wide">Scoreboard</h1>
           <p className="text-xs text-[#00F0FF] font-display mt-1 tracking-wider">
@@ -33,110 +34,112 @@ export default function Dashboard() {
       </div>
 
       {/* Scoreboard */}
-      <div className="liquid-glass rounded-2xl p-6 sm:p-8">
+      <div className="liquid-glass rounded-2xl p-6 sm:p-8 shrink-0">
         <Scoreboard />
       </div>
 
-      {/* Player Tables + Quick Actions */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_1fr_240px] gap-5 min-h-0">
-        {/* CT Table */}
+      {/* Player Tables —— 去掉 flex-1，内容自适应 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
-          className="min-h-0 flex flex-col"
         >
           <PlayerTable team="CT" />
         </motion.div>
 
-        {/* T Table */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
-          className="min-h-0 flex flex-col"
         >
           <PlayerTable team="T" />
         </motion.div>
+      </div>
 
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
-          className="liquid-glass rounded-2xl p-5 flex flex-col gap-3"
-        >
-          <h3 className="text-sm font-bold text-[#94A3B8] uppercase tracking-widest mb-1">
-            Score Edit
-          </h3>
-
+      {/* Bottom Control Bar —— 两行布局 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 0.5 }}
+        className="liquid-glass rounded-2xl p-5 flex flex-col gap-3 shrink-0"
+      >
+        {/* 第一行：加减分 */}
+        <div className="flex items-center justify-center gap-3">
           <SheenButton
             variant="primary"
             size="md"
-            className="w-full"
             onClick={() => addScore('left')}
             disabled={match.matchOver}
           >
             <Plus className="w-4 h-4" />
-            Left team +1
+            Left +1
           </SheenButton>
 
           <SheenButton
             variant="danger"
             size="md"
-            className="w-full"
             onClick={() => addScore('right')}
             disabled={match.matchOver}
           >
             <Plus className="w-4 h-4" />
-            Right team +1
+            Right +1
           </SheenButton>
 
-          <div className="h-px bg-white/5 my-1" />
+          <div className="w-px h-8 bg-white/10" />
 
           <SheenButton
             variant="ghost"
-            size="sm"
-            className="w-full"
+            size="md"
             onClick={() => subScore('left')}
           >
-            <Minus className="w-3.5 h-3.5" />
-            Left team -1
+            <Minus className="w-4 h-4" />
+            Left -1
           </SheenButton>
 
           <SheenButton
             variant="ghost"
-            size="sm"
-            className="w-full"
+            size="md"
             onClick={() => subScore('right')}
           >
-            <Minus className="w-3.5 h-3.5" />
-            Right team -1
+            <Minus className="w-4 h-4" />
+            Right -1
           </SheenButton>
+        </div>
 
-          <div className="h-px bg-white/5 my-1" />
-
+        {/* 第二行：交换 + Reset */}
+        <div className="flex items-center justify-center gap-3">
           <SheenButton
             variant="ghost"
-            size="sm"
-            className="w-full"
+            size="md"
             onClick={swapScores}
           >
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-            Switch Big Score
+            <ArrowLeftRight className="w-4 h-4" />
+            Swap Score
           </SheenButton>
 
           <SheenButton
             variant="ghost"
-            size="sm"
-            className="w-full text-[#FF3D00] border-[#FF3D00]/20 hover:border-[#FF3D00]/40 hover:bg-[#FF3D00]/5"
+            size="md"
+            onClick={swapTeamNames}
+          >
+            <Type className="w-4 h-4" />
+            Swap Names
+          </SheenButton>
+
+          <div className="w-px h-8 bg-white/10" />
+
+          <SheenButton
+            variant="ghost"
+            size="md"
+            className="text-[#FF3D00] border-[#FF3D00]/20 hover:border-[#FF3D00]/40 hover:bg-[#FF3D00]/5"
             onClick={resetMatch}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-4 h-4" />
             Reset
           </SheenButton>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
