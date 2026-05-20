@@ -131,7 +131,13 @@ function startGsiServer() {
               // 新地图单局比分归零（GSI 会立即推送新值覆盖）
               obsState.teamLeft.mapScore = 0;
               obsState.teamRight.mapScore = 0;
-
+              // 当前地图编号 +1
+              obsState.currentMap += 1;
+              // 通知前端更新 currentMap
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('map-changed', obsState.currentMap);
+              }
+              console.log('>>> Current map:', obsState.currentMap);
               // 清掉上一场 MVP
               obsState.showMvp = false;
               obsState.mvp = null;

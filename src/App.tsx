@@ -41,6 +41,17 @@ export default function App() {
   const currentPage = useAppStore(s => s.currentPage);
   const PageComponent = pageComponents[currentPage];
 
+  // ========== 新地图编号同步 ==========
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onMapChanged) return;
+    const handleMapChanged = (_event: any, mapNum: number) => {
+      useAppStore.getState().setCurrentMap(mapNum);
+    };
+    api.onMapChanged(handleMapChanged);
+    return () => { api.removeAllListeners('map-changed'); };
+  }, []);
+
     // ========== 4. GSI 数据同步到 Store（修复 Dashboard 不同步） ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
@@ -64,27 +75,27 @@ export default function App() {
       }
 
       // 同步队名 & 小比分
+      // 同步队名 & 小比分 & 新地图检测
       if (data.map) {
         const state = useAppStore.getState();
-
-        // 队名：过滤默认占位符 "CT" / "T"
+        // 队名同步（保留现有代码）
         const ctName = data.map.team_ct?.name?.trim();
         const tName = data.map.team_t?.name?.trim();
-
-        if (ctName && ctName.toUpperCase() !== 'CT') {
+        if (ctName && ctName.toUpperCase() !== 'CT' && state.match.teamLeft.name === 'CT TEAM') {
           state.setTeamName('left', ctName);
         }
-        if (tName && tName.toUpperCase() !== 'T') {
+        if (tName && tName.toUpperCase() !== 'T' && state.match.teamRight.name === 'T TEAM') {
           state.setTeamName('right', tName);
         }
 
-        // 小比分（mapScore）
+        // 小比分同步（保留现有代码）
         if (data.map.team_ct?.score !== undefined) {
           state.setMapScore('left', data.map.team_ct.score);
         }
         if (data.map.team_t?.score !== undefined) {
           state.setMapScore('right', data.map.team_t.score);
         }
+
       }
     };
 

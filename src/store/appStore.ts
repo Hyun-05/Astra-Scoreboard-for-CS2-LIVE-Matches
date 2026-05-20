@@ -25,7 +25,7 @@ interface AppState {
   toasts: Toast[];
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
-
+  setCurrentMap: (map: number) => void;
   hotkeysEnabled: boolean;
   setHotkeysEnabled: (enabled: boolean) => void;
   bgOpacity: number;
@@ -129,7 +129,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set(s => {
       const newScore = isLeft ? s.match.teamLeft.score + 1 : s.match.teamRight.score + 1;
-      const otherScore = isLeft ? s.match.teamRight.score : s.match.teamLeft.score;
       const matchOver = newScore >= needWins;
       const winner = matchOver ? (isLeft ? s.match.teamLeft.name : s.match.teamRight.name) : null;
 
@@ -142,7 +141,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
           matchOver,
           winner,
-          currentMap: Math.min(newScore + otherScore + 1, needWins * 2 - 1),
         },
       };
     });
@@ -157,11 +155,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       teamRight: { score: newMatch.teamRight.score },
       matchOver: newMatch.matchOver,
       winner: newMatch.winner,
-      currentMap: newMatch.currentMap,
-    });
+        });
   },
 
-  
+    setCurrentMap: (map) => {
+    set(s => ({
+      match: { ...s.match, currentMap: map },
+    }));
+    (window as any).electronAPI?.updateObsState?.({ currentMap: map });
+  },
+
   subScore: (side) => {
     const isLeft = side === 'left';
     set(s => ({
@@ -259,6 +262,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         teamLeft: { ...defaultMatch.teamLeft, name: s.match.teamLeft.name },
         teamRight: { ...defaultMatch.teamRight, name: s.match.teamRight.name },
         format: s.match.format,
+        currentMap: 1,
+
       },
     }));
     get().addToast('—— Match reset ——', 'warning');

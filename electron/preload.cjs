@@ -24,4 +24,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getScoreDir: () => ipcRenderer.invoke('get-score-dir'),
   toggleScoreTxt: (enabled) => ipcRenderer.invoke('toggle-score-txt', enabled),
   getScoreTxtEnabled: () => ipcRenderer.invoke('get-score-txt-enabled'),
+    onMapChanged: (callback) => ipcRenderer.on('map-changed', callback),
+
 });
