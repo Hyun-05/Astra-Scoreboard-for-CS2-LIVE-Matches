@@ -7,9 +7,10 @@ import Dashboard from '@/sections/Dashboard';
 import DataPanel from '@/sections/DataPanel';
 import HotkeysPage from '@/sections/HotkeysPage';
 import LogsPage from '@/sections/LogsPage';
-
+import TitleBar from '@/components/TitleBar';
 const BASE_WIDTH = 1620;
 const BASE_HEIGHT = 1040;
+const MIN_SCALE = 0.7;
 
 const pageComponents = {
   dashboard: Dashboard,
@@ -38,10 +39,10 @@ function Background() {
 
 export default function App() {
   const scaleRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const currentPage = useAppStore(s => s.currentPage);
   const PageComponent = pageComponents[currentPage];
 
-  // ========== 新地图编号同步 ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.onMapChanged) return;
@@ -52,7 +53,6 @@ export default function App() {
     return () => { api.removeAllListeners('map-changed'); };
   }, []);
 
-    // ========== 4. GSI 数据同步到 Store（修复 Dashboard 不同步） ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.onGsiData) return;
@@ -74,11 +74,8 @@ export default function App() {
         useAppStore.getState().updatePlayers(players);
       }
 
-      // 同步队名 & 小比分
-      // 同步队名 & 小比分 & 新地图检测
       if (data.map) {
         const state = useAppStore.getState();
-        // 队名同步（保留现有代码）
         const ctName = data.map.team_ct?.name?.trim();
         const tName = data.map.team_t?.name?.trim();
         if (ctName && ctName.toUpperCase() !== 'CT' && state.match.teamLeft.name === 'CT TEAM') {
@@ -88,42 +85,42 @@ export default function App() {
           state.setTeamName('right', tName);
         }
 
-        // 小比分同步（保留现有代码）
         if (data.map.team_ct?.score !== undefined) {
           state.setMapScore('left', data.map.team_ct.score);
         }
         if (data.map.team_t?.score !== undefined) {
           state.setMapScore('right', data.map.team_t.score);
         }
-
       }
     };
 
     api.onGsiData(handleGsiData);
     return () => { api.removeAllListeners('gsi-data'); };
   }, []);
-  // ========== 同比例缩放（核心） ==========
+
+  // ========== 核心修改：宽度驱动缩放，横向永远无黑边 ==========
   useEffect(() => {
     let rafId: number;
     const updateScale = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        if (!scaleRef.current) return;
-        const scaleX = window.innerWidth / BASE_WIDTH;
-        const scaleY = window.innerHeight / BASE_HEIGHT;
-        const scale = Math.min(scaleX, scaleY);
+        if (!scaleRef.current || !scrollRef.current) return;
 
+        // 以宽度为基准计算缩放，保证横向永远填满窗口
+        const scale = Math.max(window.innerWidth / BASE_WIDTH, MIN_SCALE);
+        const scaledHeight = BASE_HEIGHT * scale;
+
+        // 缩放层固定定位在滚动容器左上角
         scaleRef.current.style.width = `${BASE_WIDTH}px`;
         scaleRef.current.style.height = `${BASE_HEIGHT}px`;
         scaleRef.current.style.transform = `scale(${scale})`;
         scaleRef.current.style.transformOrigin = 'top left';
-
-        // 居中显示
-        const offsetX = (window.innerWidth - BASE_WIDTH * scale) / 2;
-        const offsetY = (window.innerHeight - BASE_HEIGHT * scale) / 2;
         scaleRef.current.style.position = 'absolute';
-        scaleRef.current.style.left = `${offsetX}px`;
-        scaleRef.current.style.top = `${offsetY}px`;
+        scaleRef.current.style.left = '0';
+        scaleRef.current.style.top = '0';
+
+        // 关键：滚动容器的高度必须等于缩放后的实际高度，否则滚动条会失灵
+        scrollRef.current.style.height = `${scaledHeight}px`;
       });
     };
 
@@ -135,7 +132,6 @@ export default function App() {
     };
   }, []);
 
-  // ========== 1. GSI 状态监听 ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.onGsiStatus) return;
@@ -151,7 +147,6 @@ export default function App() {
     return () => { api.removeAllListeners('gsi-status'); };
   }, []);
 
-  // ========== 2. 地图结束监听 ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.onMapEnded) return;
@@ -180,7 +175,6 @@ export default function App() {
     return () => { api.removeAllListeners('map-ended'); };
   }, []);
 
-  // ========== 全局快捷键监听 ==========
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const state = useAppStore.getState();
@@ -213,7 +207,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // ========== 3. 同步 Store 到主进程 ==========
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.updateObsState) return;
@@ -258,37 +251,40 @@ export default function App() {
     };
   }, []);
 
-  return (
-    <div className="w-screen h-screen overflow-hidden bg-[#030305]">
-      <div
-        ref={scaleRef}
-        style={{
-          transformOrigin: 'top left',
-          willChange: 'transform',
-        }}
-      >
-        <div className="w-full h-full" style={{ background: '#030305' }}>
-          <Background />
-          <Sidebar />
-          <main className="relative z-10 ml-[220px] h-full p-6 lg:p-8 flex flex-col">
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentPage}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  className="h-full"
-                >
-                  <PageComponent />
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </main>
-          <ToastNotification />
-        </div>
-      </div>
+return (
+  <div className="relative w-screen h-screen overflow-hidden bg-[#030305] flex flex-col">
+    <Background />
+
+    {/* 自定义标题栏 */}
+    <div className="relative z-50 shrink-0">
+      <TitleBar />
     </div>
-  );
+
+    {/* 内容主体：Sidebar + Main */}
+    <div className="flex flex-1 overflow-hidden relative z-10">
+      <div className="w-[220px] h-full shrink-0">
+        <Sidebar />
+      </div>
+
+      <main className="flex-1 h-full flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="h-full"
+            >
+              <PageComponent />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
+    </div>
+
+    <ToastNotification />
+  </div>
+);
 }

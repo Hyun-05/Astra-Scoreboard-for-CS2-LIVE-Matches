@@ -22,7 +22,7 @@ export default function Sidebar() {
   const gsiConnected = useAppStore(s => s.gsiConnected);
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-[220px] z-50 flex flex-col"
+    <aside className="relative h-full w-full z-50 flex flex-col"
       style={{
         background: 'var(--sidebar-bg)',
         backdropFilter: 'blur(40px) saturate(1.4)',

@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
+
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -15,6 +16,7 @@ const OBS_UPDATE_INTERVAL = 500;
 const Store = require('electron-store').default;
 const store = new Store();
 const PUBLIC_DIR = path.join(app.getPath('userData'), 'astra-public');
+
 
 let obsState = {
   format: 'BO3',
@@ -973,8 +975,11 @@ function generateNameHtml() {
 }
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1620,
-    height: 1040,
+  width: 1400,
+  height: 900,
+  minWidth: 1000,   // 根据内容调整，防止缩到太小
+  minHeight: 600,
+    frame: false,
     resizable:true,
     maximizable: true,
     autoHideMenuBar: true,
@@ -988,6 +993,17 @@ function createWindow() {
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f0f0f',
+  });
+  // ========== 新增：窗口最大化状态通知前端 ==========
+  mainWindow.on('maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-maximized', true);
+    }
+  });
+  mainWindow.on('unmaximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-maximized', false);
+    }
   });
 
   const isDev = process.env.NODE_ENV === 'development';

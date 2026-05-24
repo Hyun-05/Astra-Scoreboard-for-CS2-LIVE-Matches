@@ -20,10 +20,11 @@ export default function Dashboard() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="h-full flex flex-col gap-5 overflow-y-auto scrollbar-thin pr-1 justify-center"
+      // 关键修改：h-full 撑满父容器，flex-col 纵向排列，overflow-hidden 禁止整体滚动
+      className="h-full flex flex-col overflow-hidden p-6 lg:p-8"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+      {/* ========== 顶部：Header + 大比分（固定，不滚动）========== */}
+      <div className="flex items-center justify-between shrink-0 mb-5">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-wide">Scoreboard</h1>
           <p className="text-xs text-[#00F0FF] font-display mt-1 tracking-wider">
@@ -33,36 +34,37 @@ export default function Dashboard() {
         <MatchConfig />
       </div>
 
-      {/* Scoreboard */}
-      <div className="liquid-glass rounded-2xl p-6 sm:p-8 shrink-0">
+      <div className="liquid-glass rounded-2xl p-6 sm:p-8 shrink-0 mb-5">
         <Scoreboard />
       </div>
 
-      {/* Player Tables —— 去掉 flex-1，内容自适应 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
-        >
-          <PlayerTable team="CT" />
-        </motion.div>
+      {/* ========== 中间：数据表格（自适应高度，超出内部滚动）========== */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3, duration: 0.5 }}
+          >
+            <PlayerTable team="CT" />
+          </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-        >
-          <PlayerTable team="T" />
-        </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+          >
+            <PlayerTable team="T" />
+          </motion.div>
+        </div>
       </div>
 
-      {/* Bottom Control Bar —— 两行布局 */}
+      {/* ========== 底部：手动改分（固定，不滚动）========== */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.5 }}
-        className="liquid-glass rounded-2xl p-5 flex flex-col gap-3 shrink-0"
+        className="liquid-glass rounded-2xl p-5 flex flex-col gap-3 shrink-0 mt-5"
       >
         {/* 第一行：加减分 */}
         <div className="flex items-center justify-center gap-3">

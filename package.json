@@ -4,7 +4,7 @@
   "description": "Astra Scoreboard",
   "author": "Hyun-05 <github@Hyun-05>",
   "private": true,
-  "version": "2.1npm run build.0",
+  "version": "2.1.1",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
