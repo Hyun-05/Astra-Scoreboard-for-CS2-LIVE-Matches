@@ -19,17 +19,14 @@ export default function TitleBar() {
   const handleClose = () => (window as any).electronAPI?.closeWindow?.();
 
   return (
-    <div
-      className="h-10 bg-[#0a0a0c]/90 backdrop-blur-md border-b border-white/5 flex items-center justify-between select-none"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
+    <div className="h-10 bg-[#0a0a0c]/90 backdrop-blur-md border-b border-white/5 flex items-center justify-between select-none app-region-drag relative z-50">
       {/* 左侧：可拖动区域 */}
-      <div className="flex items-center gap-2 px-4">
+      <div className="flex items-center gap-2 px-4 h-full">
         <span className="text-sm font-semibold text-white/80 tracking-wide">Astra Director</span>
       </div>
 
       {/* 右侧：三个按钮（no-drag 确保可点击） */}
-      <div className="flex items-center h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div className="flex items-center h-full app-region-no-drag">
         <button
           onClick={handleMinimize}
           className="w-12 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -41,9 +38,9 @@ export default function TitleBar() {
           className="w-12 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
         >
           {isMaximized ? (
-            <Copy className="w-3.5 h-3.5" />   // 两个重叠方块 = 还原
+            <Copy className="w-3.5 h-3.5" />
           ) : (
-            <Square className="w-3.5 h-3.5" /> // 单个方块 = 最大化
+            <Square className="w-3.5 h-3.5" />
           )}
         </button>
         <button

@@ -991,7 +991,6 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
-    titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f0f0f',
   });
   // ========== 新增：窗口最大化状态通知前端 ==========
