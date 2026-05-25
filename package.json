@@ -1,10 +1,10 @@
 {
-  "name": "astra-scoreboard",
-  "productName": "Astra Scoreboard @말랑말랑",
-  "description": "Astra Scoreboard",
+  "name": "astra-director",
+  "productName": "Astra Director @말랑말랑",
+  "description": "Astra Director",
   "author": "Hyun-05 <github@Hyun-05>",
   "private": true,
-  "version": "2.2.0",
+  "version": "3.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -100,8 +100,8 @@
     "vite": "^7.2.4"
   },
   "build": {
-    "appId": "com.hyun05.Astra-Scoreboard",
-    "productName": "Astra Scoreboard",
+    "appId": "com.hyun05.Astra-Director",
+    "productName": "Astra Director",
     "directories": {
       "output": "release"
     },
@@ -132,12 +132,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Astra Scoreboard",
+      "shortcutName": "Astra Director",
       "installerIcon": "public/logo.ico",
       "uninstallerIcon": "public/logo.ico"
     },
     "portable": {
-      "artifactName": "Astra Scoreboard_Portable.exe"
+      "artifactName": "Astra Director_Portable.exe"
     },
     "asar": true
   }

@@ -27,10 +27,15 @@ let obsState = {
   bgImgOpacity: 0.3,
   currentMap: 1,
   matchOver: false,
+  bpAnimEnabled: false,
+  bpCardsVisible: true,
+  bpStyle: 'mono',
+  bpColors: { dark: '#292727', mid: '#6b4226', light: '#b26500' },
   winner: null,
   gsiConnected: false,
   mapName: '',
   round: 0,
+  bp: { pool: [], sequence: [], teamLeft: '', teamRight: '' },
   ctBgVisible: false,
   tBgVisible: false,
   ctBgName: 'ct_bg.png',
@@ -319,12 +324,12 @@ function startGsiServer() {
     }
   });
 
-  gsiServer.listen(32121, '127.0.0.1', () => {
-    console.log('GSI server listening on http://127.0.0.1:32121');
-  });
-
   gsiServer.on('error', (err) => {
     console.error('GSI server error:', err);
+  });
+
+  gsiServer.listen(32121, '127.0.0.1', () => {
+    console.log('GSI server listening on http://127.0.0.1:32121');
   });
 
   let lastGsiStatus = false;
@@ -345,43 +350,98 @@ function startObsServer() {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
+    // ========== 新增：支持 /maps/bp/xxx.png 和 /maps/logo/xxx.png ==========
+    const mapPathMatch = req.url.match(/^\/maps\/(.+\.(png|jpg|jpeg|webp|gif))$/i);
+    if (mapPathMatch) {
+      const relativePath = mapPathMatch[1]; // e.g., "bp/Ancient.png" or "logo/Ancient.png"
+
+      const possiblePaths = [
+        path.join(PUBLIC_DIR, 'maps', relativePath),                    // userData/astra-public/maps/bp/xxx.png
+        path.join(__dirname, '../public/maps', relativePath),           // 开发时
+        path.join(__dirname, '../dist/maps', relativePath),             // 构建后
+        path.join(process.resourcesPath, 'public/maps', relativePath),  // 打包后 resources
+      ];
+
+      for (const imgPath of possiblePaths) {
+        if (fs.existsSync(imgPath)) {
+          const ext = path.extname(imgPath).toLowerCase();
+          const mime = ext === '.png' ? 'image/png'
+                     : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+                     : ext === '.gif' ? 'image/gif'
+                     : 'image/webp';
+          res.writeHead(200, { 'Content-Type': mime });
+          res.end(fs.readFileSync(imgPath));
+          return;
+        }
+      }
+      res.writeHead(404); res.end();
+      return;
+    }
+
+    // ========== 保留你现有的根路径图片路由（用于背景图）==========
     if (req.url.match(/^\/[^\/]+\.(png|jpg|jpeg|webp|gif)$/i)) {
-      const fileName = path.basename(req.url);  // 从 URL 提取文件名
+      const fileName = path.basename(req.url);
       const bgPath = path.join(PUBLIC_DIR, fileName);
-      
+
       if (fs.existsSync(bgPath)) {
         const ext = path.extname(bgPath).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' 
-                   : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' 
-                   : ext === '.gif' ? 'image/gif' 
+        const mime = ext === '.png' ? 'image/png'
+                   : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+                   : ext === '.gif' ? 'image/gif'
                    : 'image/webp';
         res.writeHead(200, { 'Content-Type': mime });
         res.end(fs.readFileSync(bgPath));
       } else {
-        res.writeHead(404); 
-        res.end();
+        res.writeHead(404); res.end();
       }
-    } else if (req.url === '/api/state') {
+      return;
+    }
+
+    // ========== 保留你现有的其他路由 ==========
+    else if (req.url === '/api/state') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(obsState));
     } else if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(generateObsHtml());
+    } else if (req.url === '/bp') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(generateBpHtml());
     } else if (req.url === '/name1' || req.url === '/name2') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(generateNameHtml());
-    } else {
+    } else if (req.url.match(/^\/fonts\/.+\.(woff2|woff|ttf|otf)$/i)) {
+      const relativePath = req.url.replace(/^\/fonts\//, '');
+      const possiblePaths = [
+        path.join(__dirname, '../public/fonts', relativePath),
+        path.join(__dirname, '../dist/fonts', relativePath),
+        path.join(process.resourcesPath, 'public/fonts', relativePath),
+      ];
+      for (const fontPath of possiblePaths) {
+        if (fs.existsSync(fontPath)) {
+          const ext = path.extname(fontPath).toLowerCase();
+          const mime = ext === '.woff2' ? 'font/woff2'
+                    : ext === '.woff' ? 'font/woff'
+                    : ext === '.ttf' ? 'font/ttf'
+                    : 'font/opentype';
+          res.writeHead(200, { 'Content-Type': mime });
+          res.end(fs.readFileSync(fontPath));
+          return;
+        }
+      }
+    res.writeHead(404); res.end();
+  }else {
       res.writeHead(404);
       res.end();
     }
   });
 
-  obsServer.listen(8080, '127.0.0.1', () => {
-    console.log('OBS Browser Source: http://127.0.0.1:8080');
-  });
-
   obsServer.on('error', (err) => {
     console.error('OBS server error:', err);
+  });
+
+  obsServer.listen(8080, '127.0.0.1', () => {
+    console.log('OBS Browser Source: http://127.0.0.1:8080');
   });
 }
 
@@ -391,7 +451,7 @@ function generateObsHtml() {
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>CS2 Scoreboard - OBS</title>
+<title>CS2 Director - OBS</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
   
@@ -973,17 +1033,823 @@ function generateNameHtml() {
 </body>
 </html>`;
 }
+
+function generateBpHtml() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: 'Quantico';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/fonts/quantico-bold.ttf') format('truetype');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Quantico', sans-serif;
+    font-weight: 700;
+    width: 1920px; height: 1080px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: transparent;
+    padding-top: 10px;
+  }
+
+  :root {
+    --bp-dark: #292727;
+    --bp-mid: #6b4226;
+    --bp-light: #b26500;
+  }
+
+  /* ===== 标题 ===== */
+  .title-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .title-stroke {
+    position: absolute;
+    font-size: 100px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    -webkit-text-stroke: 6px #191919;
+    color: transparent;
+    white-space: nowrap;
+  }
+  .title-fill {
+    position: relative;
+    font-size: 100px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: linear-gradient(90deg, #fff700 0%, #eb8100 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    white-space: nowrap;
+  }
+
+  /* ===== 地图行 ===== */
+  .maps-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 8px;
+    height: 650px;
+    padding: 0 20px;
+  }
+
+  /* ===== 地图卡片 ===== */
+  .map-card {
+    position: relative;
+    width: 261px;
+    height: 650px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  /* ===== 基础图层 ===== */
+  .bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  /* ===== PICK / DECIDER ===== */
+  .map-card.pick .bg-img,
+  .map-card.decider .bg-img {
+    filter: none;
+  }
+  .pick-overlay, .decider-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .pick-overlay {
+    background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.2) 100%);
+  }
+  .decider-overlay {
+    background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.28) 100%);
+  }
+
+  /* ===== BAN + Mono ===== */
+  .map-card.ban-mono .bg-img {
+    filter: grayscale(100%) brightness(0.35) contrast(1.2);
+  }
+  .ban-mono-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ===== BAN + 3-Color Stylized ===== */
+  .map-card.ban-stylized .bg-img {
+    filter: grayscale(100%) contrast(1.12) brightness(0.88);
+  }
+  .bg-img-blur {
+    position: absolute;
+    inset: -8%;
+    width: 116%;
+    height: 116%;
+    object-fit: cover;
+    filter: blur(10px) grayscale(100%) contrast(0.85);
+    opacity: 0.4;
+    mix-blend-mode: screen;
+    z-index: 1;
+  }
+  .tritone-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      var(--bp-light) 0%,
+      var(--bp-mid) 48%,
+      var(--bp-dark) 100%
+    );
+    mix-blend-mode: color;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .ban-stylized-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 40%, transparent 20%, rgba(0,0,0,0.5) 100%),
+      linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.3) 100%);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* ===== BAN + CRT Monitor: Retro-Futuristic Glitch ===== */
+  .map-card.ban-glitch {
+    background: #0a0a0e;
+  }
+  /* Chromatic Aberration via drop-shadow - OBS compatible */
+  .map-card.ban-glitch .bg-img {
+    filter: grayscale(100%) contrast(1.5) brightness(0.7)
+            drop-shadow(4px 0 2px rgba(220, 50, 50, 0.55))
+            drop-shadow(-4px 0 2px rgba(50, 140, 255, 0.45));
+    animation: chromShift 4s steps(1) infinite;
+  }
+  @keyframes chromShift {
+    0%, 85% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(4px 0 2px rgba(220,50,50,0.55)) drop-shadow(-4px 0 2px rgba(50,140,255,0.45)); }
+    87% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(7px 0 2px rgba(220,50,50,0.6)) drop-shadow(-2px 0 2px rgba(50,140,255,0.4)); }
+    89% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(3px 0 2px rgba(220,50,50,0.5)) drop-shadow(-6px 0 2px rgba(50,140,255,0.5)); }
+    91% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(4px 0 2px rgba(220,50,50,0.55)) drop-shadow(-4px 0 2px rgba(50,140,255,0.45)); }
+    93% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(8px 0 2px rgba(220,50,50,0.6)) drop-shadow(-1px 0 2px rgba(50,140,255,0.4)); }
+    95% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(4px 0 2px rgba(220,50,50,0.55)) drop-shadow(-4px 0 2px rgba(50,140,255,0.45)); }
+    100% { filter: grayscale(100%) contrast(1.5) brightness(0.5) drop-shadow(4px 0 2px rgba(220,50,50,0.55)) drop-shadow(-4px 0 2px rgba(50,140,255,0.45)); }
+  }
+
+  /* 2. CRT Scanlines */
+  .crt-scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 1px,
+      rgba(0,0,0,0.25) 1px,
+      rgba(0,0,0,0.25) 3px
+    );
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .map-card.ban-glitch .crt-scanlines {
+    opacity: 1;
+    animation: scanlineMove 5s linear infinite;
+  }
+  @keyframes scanlineMove {
+    0%   { background-position: 0 0; }
+    100% { background-position: 0 60px; }
+  }
+
+  /* 3. Pixel Grid Texture */
+  .crt-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,0.04) 0.5px, transparent 0.5px);
+    background-size: 3px 3px;
+    z-index: 4;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .map-card.ban-glitch .crt-grid { opacity: 1; }
+
+  /* 4. Scan Beam */
+  .crt-beam {
+    position: absolute;
+    left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.06) 20%,
+      rgba(255,255,255,0.12) 50%,
+      rgba(255,255,255,0.06) 80%,
+      transparent 100%
+    );
+    z-index: 5;
+    pointer-events: none;
+    top: -10%;
+    opacity: 0;
+  }
+  .map-card.ban-glitch .crt-beam {
+    animation: beamSweep 4s ease-in-out infinite;
+  }
+  @keyframes beamSweep {
+    0%   { top: -10%; opacity: 0; }
+    10%  { opacity: 0.6; }
+    90%  { opacity: 0.6; }
+    100% { top: 110%; opacity: 0; }
+  }
+
+  /* 5. CRT Vignette + Glow */
+  .crt-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      /* CRT barrel distortion vignette */
+      radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.5) 75%, rgba(0,0,0,0.8) 100%),
+      /* subtle phosphor tint */
+      linear-gradient(180deg, rgba(0, 30, 20, 0.15) 0%, transparent 50%, rgba(0, 30, 20, 0.15) 100%);
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .map-card.ban-glitch .crt-vignette { opacity: 1; }
+
+  /* 6. Screen Flicker (subtle) */
+  .map-card.ban-glitch .bg-img {
+    animation: screenFlicker 5s steps(1) infinite;
+  }
+  @keyframes screenFlicker {
+    0%, 96%  { opacity: 1; }
+    97%      { opacity: 0.88; }
+    98%      { opacity: 1; }
+    99%      { opacity: 0.94; }
+    100%     { opacity: 1; }
+  }
+
+  /* 7. Ban Overlay + X */
+  .crt-ban-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(180, 30, 30, 0.08) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(180, 30, 30, 0.1) 100%
+    );
+    z-index: 7;
+    pointer-events: none;
+  }
+  .glitch-x {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 120px;
+    font-weight: 800;
+    color: rgba(220, 38, 38, 0.25);
+    text-shadow:
+      2px 0 0 rgba(255, 0, 0, 0.3),
+      -2px 0 0 rgba(0, 255, 255, 0.3),
+      0 0 20px rgba(220, 38, 38, 0.4);
+    z-index: 8;
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  /* ===== 顶部队名区 ===== */
+  .team-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 92px;
+    background: linear-gradient(180deg, #0c2d63 0%, #0a2249 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    z-index: 10;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.5),
+      0 6px 20px rgba(0,0,0,0.4);
+  }
+
+  /* 顶部高光线条 - 呼吸效果 */
+  .team-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, rgba(120,190,255,0.6) 25%, rgba(200,230,255,0.9) 50%, rgba(120,190,255,0.6) 75%, transparent 100%);
+    z-index: 5;
+    pointer-events: none;
+    animation: highlightPulse 4s ease-in-out infinite;
+  }
+  @keyframes highlightPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* 双层点阵 - transform版（GPU加速，丝滑流畅） */
+  .team-bar-dots {
+    position: absolute;
+    inset: -20px;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .team-bar-dots::before,
+  .team-bar-dots::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+  }
+  .team-bar-dots::before {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.10) 1.2px, transparent 1.2px);
+    background-size: 12px 12px;
+    animation: dotSlide1 30s linear infinite;
+  }
+  .team-bar-dots::after {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.05) 0.7px, transparent 0.7px);
+    background-size: 6px 6px;
+    animation: dotSlide2 30s linear infinite;
+  }
+  @keyframes dotSlide1 {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(60px, 60px, 0); }
+  }
+  @keyframes dotSlide2 {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-40px, -40px, 0); }
+  }
+
+  /* 扫光 - 从左到右，不停留 */
+  .team-bar-sheen {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(105deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(255,255,255,0.06) 44%,
+      rgba(255,255,255,0.14) 50%,
+      rgba(255,255,255,0.06) 56%,
+      transparent 62%,
+      transparent 100%
+    );
+    animation: sheenSweep 7s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 3;
+    mix-blend-mode: overlay;
+  }
+  @keyframes sheenSweep {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(220%); }
+  }
+
+  .team-name-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    z-index: 10;
+  }
+  .team-name-stroke {
+    position: absolute;
+    font-size: 40px;
+    font-weight: 700;
+    -webkit-text-stroke: 6px black;
+    color: transparent;
+    white-space: nowrap;
+  }
+  .team-name-fill {
+    position: relative;
+    font-size: 40px;
+    font-weight: 700;
+    background: linear-gradient(180deg, #FFFFFF 0%, #9a9a9a 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    white-space: nowrap;
+  }
+
+  /* ===== 标签 glow ===== */
+  .tag-wrap {
+    position: absolute;
+    top: 92px;
+    right: 0;
+    width: 130px;
+    height: 44px;
+    z-index: 11;
+    filter: 
+      drop-shadow(0 0 3px var(--tag-glow, rgba(255,255,255,0.4)))
+      drop-shadow(0 0 8px var(--tag-glow, rgba(255,255,255,0.2)));
+  }
+  .tag-wrap-ban { --tag-glow: rgba(220, 38, 38, 0.55); }
+  .tag-wrap-pick { --tag-glow: rgba(34, 197, 94, 0.55); }
+  .tag-wrap-decider { --tag-glow: rgba(255, 193, 7, 0.6); }
+
+  .tag {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    text-transform: capitalize;
+    letter-spacing: 0.04em;
+    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+    box-shadow: 
+      inset 0 0 0 1px rgba(255,255,255,0.35),
+      inset 0 0 8px rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .tag::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 30%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.5) 70%, transparent 100%);
+    pointer-events: none;
+  }
+  .tag-ban {
+    background: linear-gradient(180deg, rgba(220, 38, 38, 0.92) 0%, rgba(170, 22, 22, 0.92) 100%);
+    color: #fff;
+  }
+  .tag-pick {
+    background: linear-gradient(180deg, rgba(34, 197, 94, 0.92) 0%, rgba(22, 150, 60, 0.92) 100%);
+    color: #fff;
+  }
+  .tag-decider {
+    background: linear-gradient(180deg, rgba(255, 193, 7, 0.92) 0%, rgba(200, 150, 0, 0.92) 100%);
+    color: #191919;
+  }
+
+  /* ===== 地图 Logo ===== */
+  .map-logo {
+    position: absolute;
+    left: 50%;
+    bottom: 100px;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 150px;
+    object-fit: contain;
+    z-index: 11;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.7));
+  }
+
+  /* ===== 选边显示（Pick卡片）- 高可见度版 ===== */
+  .side-bar {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    pointer-events: none;
+    background: rgba(10, 10, 14, 0.75);
+    border: 2px solid;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.8);
+  }
+  .side-bar-ct {
+    color: #fff;
+    border-color: rgba(0, 240, 255, 0.65);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2), inset 0 0 6px rgba(0, 240, 255, 0.06);
+  }
+  .side-bar-ct .side-icon {
+    color: #00F0FF;
+    filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.5));
+  }
+  .side-bar-t {
+    color: #fff;
+    border-color: rgba(255, 145, 0, 0.65);
+    box-shadow: 0 0 10px rgba(255, 145, 0, 0.2), inset 0 0 6px rgba(255, 145, 0, 0.06);
+  }
+  .side-bar-t .side-icon {
+    color: #FF9100;
+    filter: drop-shadow(0 0 4px rgba(255, 145, 0, 0.5));
+  }
+  .side-icon {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    fill: none;
+    flex-shrink: 0;
+  }
+
+  /* ===== FINAL MAP 文字（Decider） ===== */
+  .final-map-text {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: rgba(255, 193, 7, 0.85);
+    text-shadow: 0 0 12px rgba(255, 193, 7, 0.3), 0 0 4px rgba(0,0,0,0.8);
+    pointer-events: none;
+  }
+
+  /* ===== 入场动画：严格串行，visibility 确保动画前完全不渲染 ===== */
+  .card-pending {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(80px);
+  }
+  .card-entering {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease-out, transform 0.35s ease-out;
+  }
+  .maps-row {
+    transition: opacity 0.4s ease;
+  }
+  .maps-row.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div class="title-box">
+    <div class="title-stroke">Ban&Pick</div>
+    <div class="title-fill">Ban&Pick</div>
+  </div>
+
+  <div class="maps-row" id="maps-row"></div>
+
+<script>
+  function fitText(strokeEl, fillEl, maxWidth) {
+    var size = 40;
+    strokeEl.style.fontSize = size + 'px';
+    fillEl.style.fontSize = size + 'px';
+    while (size > 10 && fillEl.scrollWidth > maxWidth) {
+      size -= 1;
+      strokeEl.style.fontSize = size + 'px';
+      fillEl.style.fontSize = size + 'px';
+    }
+  }
+
+  function getSeqKey(bp) {
+    if (!bp || !bp.sequence) return '';
+    return bp.sequence.map(function(s) {
+      return s.map + ':' + (s.action || '') + ':' + (s.team || '') + ':' + (s.side || '');
+    }).join('|');
+  }
+
+  function createCard(item, style, leftName, rightName, index, total, animated) {
+    var displayName = item.action === 'decider' ? 'Decider'
+      : (item.team === 'left' ? leftName : rightName);
+
+    var tagClass = item.action === 'ban' ? 'tag-ban'
+      : item.action === 'pick' ? 'tag-pick'
+      : 'tag-decider';
+    var tagText = item.action === 'ban' ? 'Ban'
+      : item.action === 'pick' ? 'Pick'
+      : 'Decider';
+
+    var cardClass = item.action === 'ban'
+      ? (style === 'stylized' ? 'ban-stylized' : style === 'glitch' ? 'ban-glitch' : 'ban-mono')
+      : item.action === 'pick' ? 'pick'
+      : 'decider';
+
+    var tagWrapClass = item.action === 'ban' ? 'tag-wrap-ban'
+      : item.action === 'pick' ? 'tag-wrap-pick'
+      : 'tag-wrap-decider';
+
+    var safeMap = item.map.replace(/[^a-zA-Z0-9]/g, '');
+
+    var card = document.createElement('div');
+    card.className = 'map-card ' + cardClass + (animated ? ' card-pending' : '');
+    card.dataset.map = safeMap;
+
+    var inner = '<img class="bg-img" src="/maps/bp/' + item.map + '.png" alt="' + item.map + '" onerror="this.style.display=\\'none\\'">';
+
+    if (item.action === 'ban' && style === 'stylized') {
+      inner += '<img class="bg-img-blur" src="/maps/bp/' + item.map + '.png" alt="" onerror="this.style.display=\\'none\\'">';
+      inner += '<div class="tritone-overlay"></div>';
+      inner += '<div class="ban-stylized-overlay"></div>';
+    } else if (item.action === 'ban' && style === 'glitch') {
+      inner += '<div class="crt-scanlines"></div>';
+      inner += '<div class="crt-grid"></div>';
+      inner += '<div class="crt-beam"></div>';
+      inner += '<div class="crt-vignette"></div>';
+      inner += '<div class="crt-ban-overlay"></div>';
+      inner += '<div class="glitch-x">&#x2715;</div>';
+    } else if (item.action === 'ban' && style === 'mono') {
+      inner += '<div class="ban-mono-overlay"></div>';
+    } else if (item.action === 'pick') {
+      inner += '<div class="pick-overlay"></div>';
+    } else if (item.action === 'decider') {
+      inner += '<div class="decider-overlay"></div>';
+    }
+
+    inner += '<div class="team-bar">' +
+      '<div class="team-bar-dots"></div>' +
+      '<div class="team-bar-sheen"></div>' +
+      '<div class="team-name-box">' +
+        '<div class="team-name-stroke" id="stroke-' + safeMap + '">' + displayName + '</div>' +
+        '<div class="team-name-fill" id="fill-' + safeMap + '">' + displayName + '</div>' +
+      '</div>' +
+    '</div>';
+
+    inner += '<div class="tag-wrap ' + tagWrapClass + '">' +
+      '<div class="tag ' + tagClass + '">' + tagText + '</div>' +
+    '</div>';
+
+    inner += '<img class="map-logo" src="/maps/logo/' + item.map + '.png" alt="' + item.map + ' logo" onerror="this.style.display=\\'none\\'">';
+
+    if (item.action === 'pick' && item.side) {
+      var oppName = item.team === 'left' ? rightName : leftName;
+      if (item.side === 'ct') {
+        inner += '<div class="side-bar side-bar-ct">' +
+          '<svg class="side-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+          oppName + ' CT</div>';
+      } else {
+        inner += '<div class="side-bar side-bar-t">' +
+          '<svg class="side-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a6 6 0 0 1-12 0c0-1.5.5-2.5 1.5-3.5"/></svg>' +
+          oppName + ' T</div>';
+      }
+    }
+
+    if (item.action === 'decider') {
+      inner += '<div class="final-map-text">FINAL MAP</div>';
+    }
+
+    card.innerHTML = inner;
+    return card;
+  }
+
+  var prevKey = null;
+  var prevStyle = null;
+  var prevCardsVisible = null;
+  var isFirstRender = true;
+
+  function render(d) {
+    var row = document.getElementById('maps-row');
+    if (!row) return;
+
+    var bp = d.bp || { sequence: [] };
+    var leftName = d.teamLeft && d.teamLeft.name || 'CT TEAM';
+    var rightName = d.teamRight && d.teamRight.name || 'T TEAM';
+    var style = d.bpStyle || 'mono';
+    var colors = d.bpColors || { dark: '#292727', mid: '#6b4226', light: '#b26500' };
+    var animEnabled = d.bpAnimEnabled === true;
+    var cardsVisible = d.bpCardsVisible !== false;
+
+    document.documentElement.style.setProperty('--bp-dark', colors.dark);
+    document.documentElement.style.setProperty('--bp-mid', colors.mid || colors.dark);
+    document.documentElement.style.setProperty('--bp-light', colors.light);
+
+    var newKey = getSeqKey(bp);
+    var hasSequence = bp.sequence && bp.sequence.length > 0;
+
+    // Show 按钮触发：从 hidden 变为 visible
+    var isShowTrigger = animEnabled && prevCardsVisible === false && cardsVisible === true;
+
+    // 强制重建条件
+    var needsRebuild = isFirstRender ||
+                       isShowTrigger ||
+                       newKey !== prevKey ||
+                       style !== prevStyle;
+
+    if (needsRebuild) {
+      isFirstRender = false;
+      prevKey = newKey;
+      prevStyle = style;
+      prevCardsVisible = cardsVisible;
+
+      // Show 触发：立即显示 row（禁用 transition），然后卡片逐个入场
+      if (isShowTrigger) {
+        row.style.transition = 'none';
+        row.classList.remove('hidden');
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            row.style.transition = '';
+          });
+        });
+      }
+
+      row.innerHTML = '';
+
+      if (hasSequence) {
+        var cardsList = [];
+        bp.sequence.forEach(function(item, index) {
+          var playEnter = isShowTrigger || animEnabled;
+          var card = createCard(item, style, leftName, rightName, index, bp.sequence.length, playEnter);
+          row.appendChild(card);
+          cardsList.push(card);
+          var safeMap = item.map.replace(/[^a-zA-Z0-9]/g, '');
+          var strokeEl = document.getElementById('stroke-' + safeMap);
+          var fillEl = document.getElementById('fill-' + safeMap);
+          if (strokeEl && fillEl) fitText(strokeEl, fillEl, 240);
+        });
+        // 逐个触发 transition 入场
+        if ((isShowTrigger || animEnabled) && cardsList.length > 0) {
+          cardsList.forEach(function(card, index) {
+            setTimeout(function() {
+              card.classList.remove('card-pending');
+              card.classList.add('card-entering');
+            }, index * 500);
+          });
+        }
+      }
+    }
+
+    // 显示/隐藏控制
+    if (!isShowTrigger) {
+      if (animEnabled) {
+        if (cardsVisible) {
+          row.classList.remove('hidden');
+        } else {
+          row.classList.add('hidden');
+        }
+      } else {
+        row.classList.remove('hidden');
+      }
+    }
+    prevCardsVisible = cardsVisible;
+
+    // 非重建时更新队名文字
+    if (!needsRebuild && hasSequence) {
+      bp.sequence.forEach(function(item) {
+        var safeMap = item.map.replace(/[^a-zA-Z0-9]/g, '');
+        var displayName = item.action === 'decider' ? 'Decider'
+          : (item.team === 'left' ? leftName : rightName);
+        var strokeEl = document.getElementById('stroke-' + safeMap);
+        var fillEl = document.getElementById('fill-' + safeMap);
+        if (strokeEl && fillEl) {
+          strokeEl.textContent = displayName;
+          fillEl.textContent = displayName;
+          fitText(strokeEl, fillEl, 240);
+        }
+      });
+    }
+  }
+
+  async function tick() {
+    try {
+      var r = await fetch('/api/state');
+      var d = await r.json();
+      render(d);
+    } catch(e) {}
+  }
+
+  tick();
+  setInterval(tick, 500);
+</script>
+</body>
+</html>`;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
-  width: 1400,
-  height: 900,
-  minWidth: 1000,   // 根据内容调整，防止缩到太小
+  width: 1360,
+  height: 700,
+  minWidth: 1000,
   minHeight: 600,
     frame: false,
     resizable:true,
     maximizable: true,
     autoHideMenuBar: true,
-    title: 'Astra Scoreboard @말랑말랑',
+    title: 'Astra Director @말랑말랑',
     icon: path.join(__dirname, 'logo.ico'),
     show: false,
     webPreferences: {
@@ -993,7 +1859,7 @@ function createWindow() {
     },
     backgroundColor: '#0f0f0f',
   });
-  // ========== 新增：窗口最大化状态通知前端 ==========
+
   mainWindow.on('maximize', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('window-maximized', true);
@@ -1021,18 +1887,17 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    if (!fs.existsSync(PUBLIC_DIR)) {
+  if (!fs.existsSync(PUBLIC_DIR)) {
     fs.mkdirSync(PUBLIC_DIR, { recursive: true });
   }
-    const defaultImages = ['ct_bg.png', 't_bg.png'];
+  const defaultImages = ['ct_bg.png', 't_bg.png'];
   defaultImages.forEach(img => {
     const dest = path.join(PUBLIC_DIR, img);
     if (!fs.existsSync(dest)) {
-      // 尝试从 asar 内部或开发目录复制
       const possibleSources = [
-        path.join(__dirname, '../public', img),      // 开发时
-        path.join(__dirname, '../dist', img),        // 构建后
-        path.join(process.resourcesPath, 'public', img) // 打包后 resources 目录
+        path.join(__dirname, '../public', img),
+        path.join(__dirname, '../dist', img),
+        path.join(process.resourcesPath, 'public', img)
       ];
       for (const src of possibleSources) {
         if (fs.existsSync(src)) {
@@ -1049,21 +1914,22 @@ app.whenReady().then(() => {
   obsState.bgImgOpacity = store.get('bgImgOpacity', 0.3);
   const savedColors = store.get('colors');
   if (savedColors) obsState.colors = savedColors;
-  const scoreDir = store.get('scoreTxtDir', path.join(app.getPath('documents'), 'Astra Scoreboard', 'scores'));
+  const scoreDir = store.get('scoreTxtDir', path.join(app.getPath('documents'), 'Astra Director', 'scores'));
   if (!fs.existsSync(scoreDir)) fs.mkdirSync(scoreDir, { recursive: true });
   writeTeamNameTxt();
   createWindow();
   startGsiServer();
   startObsServer();
+});
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
 const GSI_CFG_CONTENT = `"CS2 Scoreboard"
 {
  "uri" "http://127.0.0.1:32121/"
@@ -1086,7 +1952,6 @@ const GSI_CFG_CONTENT = `"CS2 Scoreboard"
  }
 }`;
 
-// ==================== IPC：每个 handler 独立，不嵌套 ====================
 ipcMain.handle('auto-config-gsi', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: 'Select the cs2 file ',
@@ -1099,9 +1964,8 @@ ipcMain.handle('auto-config-gsi', async () => {
   }
 
   const cfgDir = filePaths[0];
-  const cfgPath = path.join(cfgDir, 'gamestate_integration_astra_scoreboard.cfg');
+  const cfgPath = path.join(cfgDir, 'gamestate_integration_astra_Director.cfg');
 
-  // ========== 新增：已存在则跳过 ==========
   if (fs.existsSync(cfgPath)) {
     return { success: false, message: 'Already exist', path: cfgPath };
   }
@@ -1121,6 +1985,7 @@ ipcMain.handle('auto-config-gsi', async () => {
     return { success: false, message: ' Fail: ' + err.message };
   }
 });
+
 ipcMain.handle('toggle-score-txt', (event, enabled) => {
   store.set('scoreTxtEnabled', enabled);
   return true;
@@ -1129,6 +1994,7 @@ ipcMain.handle('toggle-score-txt', (event, enabled) => {
 ipcMain.handle('get-score-txt-enabled', () => {
   return store.get('scoreTxtEnabled', false);
 });
+
 ipcMain.handle('select-score-dir', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: 'Select folder for score.txt output',
@@ -1146,6 +2012,7 @@ ipcMain.handle('select-score-dir', async () => {
 ipcMain.handle('get-score-dir', () => {
   return store.get('scoreTxtDir', path.join(app.getPath('userData'), 'scores'));
 });
+
 ipcMain.handle('update-obs-state', (_, newState) => {
   const oldLeftScore = obsState.teamLeft.score;
   const oldRightScore = obsState.teamRight.score;
@@ -1154,11 +2021,13 @@ ipcMain.handle('update-obs-state', (_, newState) => {
 
   const oldLeftName = obsState.teamLeft.name;
   const oldRightName = obsState.teamRight.name;
-
+  if (newState.bp) obsState.bp = newState.bp;
   if (newState.teamLeft?.name !== undefined) 
     obsState.teamLeft.name = newState.teamLeft.name;
   if (newState.teamRight?.name !== undefined) 
     obsState.teamRight.name = newState.teamRight.name;
+  if (newState.bpStyle) obsState.bpStyle = newState.bpStyle;
+  if (newState.bpColors) obsState.bpColors = newState.bpColors;
   if (typeof newState.teamLeft?.score === 'number') obsState.teamLeft.score = newState.teamLeft.score;
   if (typeof newState.teamRight?.score === 'number') obsState.teamRight.score = newState.teamRight.score;
   if (typeof newState.teamLeft?.mapScore === 'number') obsState.teamLeft.mapScore = newState.teamLeft.mapScore;
@@ -1169,14 +2038,17 @@ ipcMain.handle('update-obs-state', (_, newState) => {
   if (typeof newState.currentMap === 'number') obsState.currentMap = newState.currentMap;
   if (typeof newState.matchOver === 'boolean') obsState.matchOver = newState.matchOver;
   if (newState.winner !== undefined) obsState.winner = newState.winner;
+  if (typeof newState.bpAnimEnabled === 'boolean') obsState.bpAnimEnabled = newState.bpAnimEnabled;
+  if (typeof newState.bpCardsVisible === 'boolean') obsState.bpCardsVisible = newState.bpCardsVisible;
   if (typeof newState.gsiConnected === 'boolean') obsState.gsiConnected = newState.gsiConnected;
   if (newState.mvp !== undefined) obsState.mvp = newState.mvp;
   if (typeof newState.showMvp === 'boolean') obsState.showMvp = newState.showMvp;
   if (typeof newState.bgOpacity === 'number') obsState.bgOpacity = newState.bgOpacity;
   if (typeof newState.bgImgOpacity === 'number') {
-  obsState.bgImgOpacity = newState.bgImgOpacity;
-  store.set('bgImgOpacity', newState.bgImgOpacity);
-}
+    obsState.bgImgOpacity = newState.bgImgOpacity;
+    store.set('bgImgOpacity', newState.bgImgOpacity);
+  }
+
   const isReset = newState.teamLeft?.score === 0 && newState.teamRight?.score === 0 &&
                   newState.teamLeft?.mapScore === 0 && newState.teamRight?.mapScore === 0 &&
                   (oldLeftScore > 0 || oldRightScore > 0 || oldLeftMapScore > 0 || oldRightMapScore > 0);
@@ -1185,7 +2057,6 @@ ipcMain.handle('update-obs-state', (_, newState) => {
     resetAdrTracker();
     obsState.teamLeft.name = 'CT TEAM';
     obsState.teamRight.name = 'T TEAM';
-    
     obsState.showMvp = false;
     obsState.mvp = null;
     store.set('showMvp', false);
@@ -1194,7 +2065,7 @@ ipcMain.handle('update-obs-state', (_, newState) => {
 
   writeScoreTxt();
   if (obsState.teamLeft.name !== oldLeftName || obsState.teamRight.name !== oldRightName) {
-  writeTeamNameTxt();
+    writeTeamNameTxt();
   }
   return true;
 });
@@ -1208,8 +2079,7 @@ ipcMain.handle('select-bg-image', async (event, team) => {
   if (canceled || !filePaths.length) return { success: false };
 
   const src = filePaths[0];
-
-  const destName = path.basename(src);  // 例如 "Natus Vincere.png"
+  const destName = path.basename(src);
   const dest = path.join(PUBLIC_DIR, destName);
 
   if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
@@ -1239,6 +2109,7 @@ ipcMain.handle('update-team-color', (event, team, colorData) => {
 ipcMain.handle('get-team-colors', () => {
   return obsState.colors || {};
 });
+
 ipcMain.handle('get-bg-config', () => {
   return {
     ctBgVisible: store.get('ctBgVisible', false),

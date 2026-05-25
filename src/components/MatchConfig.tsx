@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Check, Undo2 } from 'lucide-react';   // ← 新增 Undo2
+import { Settings, Check, Undo2 ,Copy } from 'lucide-react';   // ← 新增 Undo2
 
 export default function MatchConfig() {
   const [isOpen, setIsOpen] = useState(false);
   const match = useAppStore(s => s.match);
   const setFormat = useAppStore(s => s.setFormat);
   const setTeamName = useAppStore(s => s.setTeamName);
+  const [copied, setCopied] = useState<string | null>(null);   // ← 新增复制状态
+
   const resetTeamNames = useAppStore(s => s.resetTeamNames);   // ← 新增
 
   const [leftName, setLeftName] = useState(match.teamLeft.name);
@@ -18,13 +20,17 @@ export default function MatchConfig() {
     setTeamName('right', rightName);
     useAppStore.getState().addToast('Name updated', 'success');
   };
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 1500);
+  };
 
   const handleReset = () => {
     resetTeamNames();
     setLeftName('CT TEAM');
     setRightName('T TEAM');
   };
-
   return (
     <div className="relative">
       <button
@@ -71,6 +77,7 @@ export default function MatchConfig() {
 
               {/* Team Names */}
               <div className="space-y-3 mb-4">
+                {/* Left Team */}
                 <div>
                   <label className="text-xs text-[#94A3B8] mb-1.5 block">Left Team</label>
                   <input
@@ -79,7 +86,16 @@ export default function MatchConfig() {
                     onChange={e => setLeftName(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-[#475569] focus:outline-none focus:border-[#00F0FF]/50 transition-colors"
                   />
+                  <button
+                    onClick={() => handleCopy('http://127.0.0.1:8080/name1', 'left')}
+                    className="mt-1.5 flex items-center gap-1 text-[10px] text-[#00F0FF] hover:text-white transition-colors cursor-pointer"
+                  >
+                    {copied === 'left' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    URL: http://127.0.0.1:8080/name1
+                  </button>
                 </div>
+
+                {/* Right Team */}
                 <div>
                   <label className="text-xs text-[#94A3B8] mb-1.5 block">Right Team</label>
                   <input
@@ -88,6 +104,13 @@ export default function MatchConfig() {
                     onChange={e => setRightName(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-[#475569] focus:outline-none focus:border-[#FF9100]/50 transition-colors"
                   />
+                  <button
+                    onClick={() => handleCopy('http://127.0.0.1:8080/name2', 'right')}
+                    className="mt-1.5 flex items-center gap-1 text-[10px] text-[#FF9100] hover:text-white transition-colors cursor-pointer"
+                  >
+                    {copied === 'right' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    URL: http://127.0.0.1:8080/name2
+                  </button>
                 </div>
               </div>
 

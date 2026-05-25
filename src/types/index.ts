@@ -46,4 +46,4 @@ export interface Toast {
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
-export type PageName = 'dashboard' | 'datapanel' | 'hotkeys' | 'logs';
+export type PageName = 'dashboard' | 'banpick' | 'datapanel' | 'hotkeys' | 'logs';

@@ -18,7 +18,7 @@ interface AppState {
   mvp: { name: string; steamid: string; team: 'CT' | 'T'; kd: number } | null;
   hotkeys: HotkeyConfig;
   setHotkey: (action: keyof HotkeyConfig, key: string) => void;
-
+  
   logs: LogEntry[];
   addLog: (message: string, type?: LogEntry['type']) => void;
 
@@ -37,8 +37,23 @@ interface AppState {
   setShowMvp: (show: boolean) => void;
   gsiConnected: boolean;
   setGsiConnected: (connected: boolean) => void;
-
+  bpStyle: 'mono' | 'stylized' | 'glitch';
+  bpColors: { dark: string; mid: string; light: string };
+  setBpStyle: (style: 'mono' | 'stylized' | 'glitch') => void;
+  setBpColors: (colors: { dark: string; mid: string; light: string }) => void;
+  bpAnimEnabled: boolean;
+  setBpAnimEnabled: (enabled: boolean) => void;
   updatePlayers: (players: Player[]) => void;
+    // 新增：BanPick 状态
+  bp: {
+    pool: string[];
+    sequence: { map: string; action: 'ban' | 'pick' | 'decider' | 'none'; team: 'left' | 'right' | null; side: 'ct' | 't' | null }[];
+    teamLeft: string;
+    teamRight: string;
+  };
+  setBpSequence: (sequence: { map: string; action: 'ban' | 'pick' | 'decider' | 'none'; team: 'left' | 'right' | null; side: 'ct' | 't' | null }[]) => void;
+  setBpAction: (map: string, action: 'ban' | 'pick' | 'decider' | 'none', team: 'left' | 'right' | null, side?: 'ct' | 't' | null) => void;
+  resetBp: () => void;
 }
 
 const defaultMatch: MatchState = {
@@ -94,14 +109,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     teamLeft: { ...defaultMatch.teamLeft, players: generateSamplePlayers('CT') },
     teamRight: { ...defaultMatch.teamRight, players: generateSamplePlayers('T') },
   },
-
+  setBpSequence: (sequence) => set(s => ({ bp: { ...s.bp, sequence } })),
   setFormat: (format) => {
     set(state => ({
       match: { ...state.match, format, matchOver: false, winner: null },
     }));
     get().addLog(`channged into ${format}`, 'info');
   },
-
+  bpStyle: 'mono',
+  bpColors: { dark: '#292727', mid: '#6b4226', light: '#b26500' },  
+  setBpStyle: (style) => {
+    set({ bpStyle: style });
+    (window as any).electronAPI?.updateObsState?.({ bpStyle: style });
+  },
+  setBpColors: (colors) => {
+    set({ bpColors: colors });
+    (window as any).electronAPI?.updateObsState?.({ bpColors: colors });
+  },
+    bpAnimEnabled: false,
+    setBpAnimEnabled: (enabled) => {
+    set({ bpAnimEnabled: enabled });
+    (window as any).electronAPI?.updateObsState?.({ bpAnimEnabled: enabled });
+  },
   setTeamName: (side, name) => {
     set(state => ({
       match: {
@@ -118,6 +147,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       teamRight: { name: newMatch.teamRight.name },
     });
     
+  },
+    bp: {
+    pool: ['Ancient','Anubis','Dust2','Inferno','Mirage','Nuke','Overpass','Vertigo'],
+    sequence: [],
+    teamLeft: '',
+    teamRight: '',
+  },
+
+  setBpAction: (map, action, team, side) => {
+    set(s => {
+      const existingIndex = s.bp.sequence.findIndex(x => x.map === map);
+      let newSequence = [...s.bp.sequence];
+      if (existingIndex >= 0) {
+        newSequence[existingIndex] = {
+          ...newSequence[existingIndex],
+          map,
+          action,
+          team,
+          side: side !== undefined ? side : newSequence[existingIndex].side,
+        };
+      } else {
+        newSequence.push({ map, action, team, side: side ?? null });
+      }
+      newSequence = newSequence.filter(x => x.action !== 'none');
+      return { bp: { ...s.bp, sequence: newSequence } };
+    });
+    (window as any).electronAPI?.updateObsState?.({ bp: get().bp });
+  },
+
+  resetBp: () => {
+    set(s => ({
+      bp: { ...s.bp, sequence: [], teamLeft: '', teamRight: '' },
+    }));
   },
 
   addScore: (side) => {

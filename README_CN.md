@@ -1,153 +1,98 @@
-🇺🇸 [English](./README.md)
+# Astra Director
 
-# Astra Scoreboard
+一款专业的 CS2 赛事导播工具，打通游戏实时数据与 OBS 浏览器源。为赛事导演、直播制作人和电竞导播团队设计，无需手动录入即可实现实时比分板、选手数据面板和 BP 选图视觉呈现。
 
-> 专为 CS2 赛事导播打造的实时数据面板与 OBS 叠加层。
-
-[![Electron](https://img.shields.io/badge/Electron-41.5.1-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-19.2.0-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
+**[English README](README.md)**
 
 ---
 
-## 这是什么？
+## ✨ 功能特性
 
-Astra Scoreboard 是一款面向 **CS2 赛事导播** 和 **OBS 直播者** 的桌面端软件。它通过 CS2 的游戏状态集成接口（GSI）直连游戏，实时获取比分、玩家数据、ADR、K/D 等信息，并渲染为简洁美观的直播叠加层。
+### 实时比分与选手数据
+- **GSI 实时接入** — 自动接收 CS2 游戏状态集成数据（比分、击杀、死亡、助攻、ADR、K/D）
+- **双栏选手表** — CT 与 T 阵营并排显示，按 ADR 实时排序
+- **MVP 自动计算** — 基于 ADR 排名 + K/D 排名综合评分，自动判定单图 MVP
+- **系列赛追踪** — 支持 BO1/BO3/BO5 赛制，记录每小局比分与当前局次
 
-无需手动改分，无需表格 juggling。打开软件，添加浏览器源到 OBS，数据自动同步。
+### Ban & Pick 视觉系统
+- **三种遮罩风格** — Mono（高对比灰度）、Stylized（三色渐变映射）、Glitch（扫描线+色差故障风）
+- **可自定义三色调** — 暗部 / 中间调 / 亮部三色自由调配
+- **选边显示** — Pick 地图下方显示对方队伍选边（CT/T），带队伍名与阵营图标
+- **决胜图差异化** — 最后一张图自动标注金色 Decider 标签与 "FINAL MAP" 字样
+- **阶梯入场动画** — 开启 Animation 后卡片依次从下方滑入
+
+### OBS 深度集成
+- **零延迟浏览器源** — 独立 HTTP 服务器（`127.0.0.1:8080`）输出优化 HTML 页面
+- **多路由端点**
+  - `/` — 主比分板
+  - `/bp` — BP 选图界面
+  - `/name1` / `/name2` — 队伍名 overlay（自动适配 + 描边）
+- **GSI 自动配置** — 一键生成 `gamestate_integration_astra_Director.cfg`
+- **比分 TXT 导出** — 自动写入 `score.txt`、`simple.txt`、`teamname1.txt`、`teamname2.txt` 供外部工具调用
+
+### 深度自定义
+- **队伍配色** — CT/T 独立配置主色、发光色、边框色、阴影色
+- **背景图上传** — 支持自定义队伍背景图，透明度可调
+- **响应式布局** — 以宽度为基准等比缩放，最小字号保护，缩放无黑边
+- **快捷键支持** — 键盘快捷键控制加分、减分、交换、重置
 
 ---
 
-## 下载
+## 🛠 技术栈
 
-| 版本 | 文件 |
+| 层级 | 技术 |
 |------|------|
-| 安装包 | `Astra Scoreboard Setup X.X.X.exe` |
-| 绿色版 | `Astra Scoreboard_Portable.exe` |
-
-> **仅支持 Windows 10/11**，无需额外运行环境。
+| 桌面端 | Electron（main.cjs + preload.cjs） |
+| 前端 | React + TypeScript + Tailwind CSS |
+| 状态管理 | Zustand（appStore.ts） |
+| 动画 | Framer Motion + CSS keyframes |
+| 数据源 | CS2 GSI（HTTP POST `127.0.0.1:32121`） |
+| OBS 服务 | Node.js `http` 模块（端口 8080） |
+| 持久化 | `electron-store` |
+| 字体 | Rajdhani、Quantico、JetBrains Mono |
 
 ---
 
-## 快速上手
+## 📦 安装
 
-### 1. 连接 CS2（GSI）
+从 [Releases](../../releases) 下载最新版 `Astra Director Setup X.X.X.exe`，双击运行即可。无需额外依赖。
 
-**自动配置（推荐）**
-1. 打开软件 → 进入 **Scoreboard** 页面。
-2. 点击 **Auto Config GSI**。
-3. 选择 CS2 的 `cfg` 文件夹：
-   ```
-   .../Counter-Strike Global Offensive/game/csgo/cfg
-   ```
-4. 软件自动写入 `gamestate_integration_astra_scoreboard.cfg`。
-5. 如果 CS2 正在运行，**重启游戏**。
+**内置素材**（地图图、字体、默认背景）通过 `extraResources` 打包进安装包，用户无需手动放置文件。
 
-**手动配置**
-在 `cfg` 文件夹中新建文件 `gamestate_integration_astra_scoreboard.cfg`，内容如下：
-```
-"CS2 Scoreboard"
-{
- "uri" "http://127.0.0.1:32121/"
- "timeout" "5.0"
- "buffer" "0.1"
- "throttle" "0.5"
- "heartbeat" "30.0"
- "data"
- {
-  "provider"      "1"
-  "map"           "1"
-  "round"         "1"
-  "player_id"     "1"
-  "player_state"  "1"
-  "player_match_stats" "1"
-  "allplayers_id"      "1"
-  "allplayers_state"   "1"
-  "allplayers_match_stats" "1"
-  "allplayers_position"    "1"
- }
-}
+---
+
+## 🚀 快速开始
+
+1. **启动** Astra Director
+2. **自动配置 GSI** — 点击按钮将 cfg 文件生成到 CS2 `game/csgo/cfg` 目录
+3. **启动 CS2** 并确保 GSI 配置已加载
+4. **在 OBS 中添加浏览器源**
+   - 比分板：`http://127.0.0.1:8080/`（1920×1080）
+   - BP 选图：`http://127.0.0.1:8080/bp`（1920×1080）
+   - 队伍名：`http://127.0.0.1:8080/name1` 与 `/name2`
+
+---
+
+## 🎮 开发
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式（Vite + Electron）
+npm run electron:dev
+
+# 构建生产版可执行文件
+npm run build
+npm run electron:build
 ```
 
-### 2. 添加到 OBS
+---
 
-1. 添加 **浏览器源（Browser Source）**。
-2. URL：`http://127.0.0.1:8080`
-3. 分辨率：`1920 x 1080`
-4. 可选勾选 **不可见时关闭源**。
+## 📄 许可
 
-比赛开始后，叠加层自动显示。
+MIT License — 可自由 fork 修改用于自有赛事直播。
 
 ---
 
-## 操作说明
-
-### 全局快捷键
-
-在 **Hotkeys** 页面可自定义，支持一键全局启用/停用。
-
-| 功能 | 默认按键 |
-|------|---------|
-| 左队 +1 | `A` |
-| 右队 +1 | `B` |
-| 左队 -1 | `C` |
-| 右队 -1 | `D` |
-| 交换比分 | `S` |
-| 重置比赛 | `R` |
-
-### Score.txt 导出
-
-软件自动将 `score.txt` 写入指定文件夹，可用于 OBS **文本（GDI+）** 源作为轻量比分显示。
-
-默认路径：`%APPDATA%/Astra Scoreboard/scores/score.txt`
-
-在 **Scoreboard** 页面 → **Score.txt Output** → **Change** 修改路径。
-
----
-
-## 自定义设置
-
-- **队伍颜色** — 实时修改 CT/T 主色、发光色、边框色、阴影色。
-- **队伍 Logo** — 上传 PNG/JPG/WebP 作为卡片背景水印。
-- **透明度** — 独立调节黑色玻璃层和 Logo 透明度。
-- **赛制** — BO1、BO3 或自定义。
-- **缩放** — 窗口等比例缩放，内容始终清晰。
-
----
-
-## 工作原理
-
-- **GSI 服务器**（`:32121`）— 每 0.5 秒接收 CS2 原始游戏数据。
-- **ADR 引擎** — 追踪每回合伤害峰值，锁定已结束回合，计算滚动平均值。误差范围：±10（实时 GSI 工具的行业标准）。
-- **MVP 逻辑** — ADR 排名 + K/D 排名综合评分。平局决胜：击杀数 → ADR 原始值 → 死亡数。
-- **OBS 服务器**（`:8080`）— 提供自包含 HTML 叠加层，通过轮询实时状态渲染。
-
----
-
-## 技术栈
-
-- **前端：** React 19、TypeScript、Tailwind CSS、Framer Motion、Zustand
-- **桌面端：** Electron、electron-builder
-- **运行时：** Node.js `http`（双服务器架构）
-- **持久化：** electron-store
-
----
-
-## 已知限制
-
-- **CS2 必须保持前台** 才能发送 GSI 数据。切到后台超过 5 秒会显示 `DISCONNECTED`，切回后自动恢复。
-- **ADR 精度** 因 GSI 0.5 秒采样间隔存在 ±10 误差，这是所有实时工具的固有特性。
-- **队伍名称** 限制为 4 个汉字（或等效宽度），防止布局溢出。
-
----
-
-## 许可证
-
-MIT © [Hyun-05](https://github.com/Hyun-05)
-
----
-
-<p align="center">
-  <sub>为 CS2 赛事导播而造。</sub>
-</p>
+*为 CS2 电竞社区精心打造。*

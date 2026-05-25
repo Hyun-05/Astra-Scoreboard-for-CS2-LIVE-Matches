@@ -8,13 +8,16 @@ import DataPanel from '@/sections/DataPanel';
 import HotkeysPage from '@/sections/HotkeysPage';
 import LogsPage from '@/sections/LogsPage';
 import TitleBar from '@/components/TitleBar';
-const BASE_WIDTH = 1620;
-const BASE_HEIGHT = 1040;
+import BanPickPage from '@/sections/BanPickPage';
+
+const BASE_WIDTH = 1360;
+const BASE_HEIGHT = 700;
 const MIN_SCALE = 0.7;
 
 const pageComponents = {
   dashboard: Dashboard,
   datapanel: DataPanel,
+  banpick: BanPickPage,
   hotkeys: HotkeysPage,
   logs: LogsPage,
 };
@@ -234,6 +237,7 @@ export default function App() {
         mvp: state.mvp,
         showMvp: state.showMvp,
         bgOpacity: state.bgOpacity,
+        bp: state.bp,
       };
       if (!timer) {
         timer = setTimeout(() => {

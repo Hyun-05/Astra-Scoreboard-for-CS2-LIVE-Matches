@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store/appStore';
 import type { PageName } from '@/types';
+import { Map } from 'lucide-react';
+
 import {
   LayoutDashboard,
   BarChart3,
@@ -11,6 +13,7 @@ import {
 
 const navItems: { id: PageName; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Controlpannel', icon: LayoutDashboard },
+  { id: 'banpick', label: 'Ban & Pick', icon: Map },      // ← 新增
   { id: 'datapanel', label: 'Scoreboard', icon: BarChart3 },
   { id: 'hotkeys', label: 'Hotkeys', icon: Keyboard },
   { id: 'logs', label: 'Log', icon: ScrollText },
@@ -86,7 +89,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-[11px] text-[#94A3B8]">github@Hyun-05</p>
-            <p className="text-[9px] text-[#475569]">v2.0.0 Astra</p>
+            <p className="text-[9px] text-[#475569]">v3.0.0 Astra</p>
           </div>
         </div>
       </div>
