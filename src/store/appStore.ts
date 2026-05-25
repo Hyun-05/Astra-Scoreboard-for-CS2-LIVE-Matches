@@ -1,6 +1,32 @@
 import { create } from 'zustand';
 import type { MatchState, HotkeyConfig, LogEntry, Toast, PageName, Player } from '@/types';
 
+// ===== 导出类型 =====
+
+export interface BpCustomColors {
+  titleStart: string;
+  titleEnd: string;
+  teamBarStart: string;
+  teamBarEnd: string;
+  deciderTag: string;
+  deciderText: string;
+  banTag: string;
+  banText: string;
+  pickTag: string;
+  pickText: string;
+}
+
+export type BpCustomColorKey = keyof BpCustomColors;
+
+export interface BpItem {
+  map: string;
+  action: 'ban' | 'pick' | 'decider' | 'none';
+  team: 'left' | 'right' | null;
+  side: 'ct' | 't' | null;
+}
+
+// ===== 主接口 =====
+
 interface AppState {
   currentPage: PageName;
   setPage: (page: PageName) => void;
@@ -43,15 +69,19 @@ interface AppState {
   setBpColors: (colors: { dark: string; mid: string; light: string }) => void;
   bpAnimEnabled: boolean;
   setBpAnimEnabled: (enabled: boolean) => void;
+  // --- 新增：颜色自定义 ---
+  bpCustomColors: BpCustomColors;
+  setBpCustomColors: (colors: Partial<BpCustomColors>) => void;
+  resetBpCustomColors: () => void;
   updatePlayers: (players: Player[]) => void;
     // 新增：BanPick 状态
   bp: {
     pool: string[];
-    sequence: { map: string; action: 'ban' | 'pick' | 'decider' | 'none'; team: 'left' | 'right' | null; side: 'ct' | 't' | null }[];
+    sequence: BpItem[];
     teamLeft: string;
     teamRight: string;
   };
-  setBpSequence: (sequence: { map: string; action: 'ban' | 'pick' | 'decider' | 'none'; team: 'left' | 'right' | null; side: 'ct' | 't' | null }[]) => void;
+  setBpSequence: (sequence: BpItem[]) => void;
   setBpAction: (map: string, action: 'ban' | 'pick' | 'decider' | 'none', team: 'left' | 'right' | null, side?: 'ct' | 't' | null) => void;
   resetBp: () => void;
 }
@@ -100,6 +130,19 @@ const generateSamplePlayers = (team: 'CT' | 'T'): Player[] => {
   })).map(p => ({ ...p, kd: Math.floor((p.kills / Math.max(p.deaths, 1)) * 100) / 100 })) 
 };
 
+export const defaultBpCustomColors: BpCustomColors = {
+  titleStart: '#fff700',
+  titleEnd: '#eb8100',
+  teamBarStart: '#0c2d63',
+  teamBarEnd: '#0a2249',
+  deciderTag: '#ffc107',
+  deciderText: '#191919',
+  banTag: '#dc2626',
+  banText: '#ffffff',
+  pickTag: '#22c55e',
+  pickText: '#ffffff',
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   currentPage: 'dashboard',
   setPage: (page) => set({ currentPage: page }),
@@ -130,6 +173,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     setBpAnimEnabled: (enabled) => {
     set({ bpAnimEnabled: enabled });
     (window as any).electronAPI?.updateObsState?.({ bpAnimEnabled: enabled });
+  },
+  // --- 颜色自定义 ---
+  bpCustomColors: { ...defaultBpCustomColors },
+  setBpCustomColors: (colors) => {
+    const bpCustomColors = { ...get().bpCustomColors, ...colors };
+    set({ bpCustomColors });
+    (window as any).electronAPI?.updateObsState?.({ bpCustomColors });
+  },
+  resetBpCustomColors: () => {
+    set({ bpCustomColors: { ...defaultBpCustomColors } });
+    (window as any).electronAPI?.updateObsState?.({ bpCustomColors: { ...defaultBpCustomColors } });
   },
   setTeamName: (side, name) => {
     set(state => ({

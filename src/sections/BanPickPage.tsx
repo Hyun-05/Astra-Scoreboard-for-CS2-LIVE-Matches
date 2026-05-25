@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, type BpCustomColorKey } from '@/store/appStore';
+import { RotateCcw } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { X, GripVertical, Copy, Check, Shield, Flame, Eye, EyeOff, Play, Pause } from 'lucide-react';
 
@@ -20,8 +21,12 @@ export default function BanPickPage() {
   const bpColors = useAppStore(s => s.bpColors);
   const bpAnimEnabled = useAppStore(s => s.bpAnimEnabled);
   const setBpAnimEnabled = useAppStore(s => s.setBpAnimEnabled);
+  const bpCustomColors = useAppStore(s => s.bpCustomColors);
+  const setBpCustomColors = useAppStore(s => s.setBpCustomColors);
+  const resetBpCustomColors = useAppStore(s => s.resetBpCustomColors);
   const [copied, setCopied] = useState(false);
   const [cardsVisible, setCardsVisible] = useState(true);
+  const [showColorPanel, setShowColorPanel] = useState(false);
 
   const isInSequence = (map: string) => bp.sequence.some(x => x.map === map);
   const isFull = bp.sequence.length >= 7;
@@ -29,7 +34,7 @@ export default function BanPickPage() {
   const handleMapClick = (map: string) => {
     if (isInSequence(map) || isFull) return;
     const action: BpAction = bp.sequence.length === 6 ? 'decider' : 'ban';
-    setBpAction(map, action, 'left');
+    setBpAction(map, action, 'left', null);
   };
 
   const handleRemove = (map: string) => {
@@ -74,6 +79,15 @@ export default function BanPickPage() {
   };
 
   const getMapImg = (map: string) => `./maps/${map}.png`;
+
+  // 颜色选择器组件
+  const colorGroups: { label: string; keys: { key: BpCustomColorKey; label: string }[] }[] = [
+    { label: 'Title', keys: [{ key: 'titleStart', label: 'Start' }, { key: 'titleEnd', label: 'End' }] },
+    { label: 'Team Bar', keys: [{ key: 'teamBarStart', label: 'Start' }, { key: 'teamBarEnd', label: 'End' }] },
+    { label: 'Ban', keys: [{ key: 'banTag', label: 'Tag' }, { key: 'banText', label: 'Text' }] },
+    { label: 'Pick', keys: [{ key: 'pickTag', label: 'Tag' }, { key: 'pickText', label: 'Text' }] },
+    { label: 'Decider', keys: [{ key: 'deciderTag', label: 'Tag' }, { key: 'deciderText', label: 'Text' }] },
+  ];
 
   return (
     <motion.div
@@ -146,8 +160,8 @@ export default function BanPickPage() {
         </span>
       </div>
 
-      {/* Style switcher */}
-      <div className="flex items-center gap-3 mb-3">
+      {/* Style switcher + Color Customization */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-xs text-gray-500 uppercase tracking-wider">Mask Style</span>
         <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
           {(['mono', 'stylized', 'glitch'] as const).map(style => (
@@ -179,7 +193,50 @@ export default function BanPickPage() {
             ))}
           </div>
         )}
+
+        {/* Color Customization Toggle */}
+        <button
+          onClick={() => setShowColorPanel(!showColorPanel)}
+          className={`ml-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${
+            showColorPanel ? 'bg-yellow-500/15 text-yellow-400' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          Colors
+        </button>
       </div>
+
+      {/* Color Customization Panel */}
+      {showColorPanel && (
+        <div className="flex gap-4 mb-3 p-3 bg-white/5 rounded-lg flex-wrap items-end">
+          {colorGroups.map(group => (
+            <div key={group.label} className="flex flex-col gap-1">
+              <span className="text-[9px] text-gray-500 uppercase">{group.label}</span>
+              <div className="flex gap-1.5">
+                {group.keys.map(({ key, label }) => (
+                  <div key={key} className="flex flex-col items-center gap-0.5">
+                    <input
+                      type="color"
+                      value={bpCustomColors[key]}
+                      onChange={(e) => setBpCustomColors({ [key]: e.target.value })}
+                      className="w-6 h-6 rounded border-0 bg-transparent cursor-pointer p-0"
+                      title={label}
+                    />
+                    <span className="text-[7px] text-gray-500 uppercase">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {/* Reset */}
+          <button
+            onClick={resetBpCustomColors}
+            className="px-3 py-1.5 rounded-md text-[10px] font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1 border border-white/5 hover:border-white/10"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Reset
+          </button>
+        </div>
+      )}
 
       {/* Map pool grid */}
       <div className="grid grid-cols-5 gap-2 mb-3">

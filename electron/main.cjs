@@ -31,6 +31,18 @@ let obsState = {
   bpCardsVisible: true,
   bpStyle: 'mono',
   bpColors: { dark: '#292727', mid: '#6b4226', light: '#b26500' },
+  bpCustomColors: {
+    titleStart: '#fff700',
+    titleEnd: '#eb8100',
+    teamBarStart: '#0c2d63',
+    teamBarEnd: '#0a2249',
+    deciderTag: '#ffc107',
+    deciderText: '#191919',
+    banTag: '#dc2626',
+    banText: '#ffffff',
+    pickTag: '#22c55e',
+    pickText: '#ffffff',
+  },
   winner: null,
   gsiConnected: false,
   mapName: '',
@@ -1067,6 +1079,16 @@ function generateBpHtml() {
     --bp-dark: #292727;
     --bp-mid: #6b4226;
     --bp-light: #b26500;
+    --title-start: #fff700;
+    --title-end: #eb8100;
+    --team-bar-start: #0c2d63;
+    --team-bar-end: #0a2249;
+    --decider-tag: #ffc107;
+    --decider-text: #191919;
+    --ban-tag: #dc2626;
+    --ban-text: #ffffff;
+    --pick-tag: #22c55e;
+    --pick-text: #ffffff;
   }
 
   /* ===== 标题 ===== */
@@ -1091,7 +1113,7 @@ function generateBpHtml() {
     font-size: 100px;
     font-weight: 700;
     letter-spacing: 0.02em;
-    background: linear-gradient(90deg, #fff700 0%, #eb8100 100%);
+    background: linear-gradient(90deg, var(--title-start) 0%, var(--title-end) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -1344,7 +1366,7 @@ function generateBpHtml() {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 92px;
-    background: linear-gradient(180deg, #0c2d63 0%, #0a2249 100%);
+    background: linear-gradient(180deg, var(--team-bar-start) 0%, var(--team-bar-end) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1465,13 +1487,22 @@ function generateBpHtml() {
     width: 130px;
     height: 44px;
     z-index: 11;
-    filter: 
-      drop-shadow(0 0 3px var(--tag-glow, rgba(255,255,255,0.4)))
-      drop-shadow(0 0 8px var(--tag-glow, rgba(255,255,255,0.2)));
+    filter:
+      drop-shadow(0 0 3px var(--tag-glow-1, rgba(255,255,255,0.4)))
+      drop-shadow(0 0 8px var(--tag-glow-2, rgba(255,255,255,0.2)));
   }
-  .tag-wrap-ban { --tag-glow: rgba(220, 38, 38, 0.55); }
-  .tag-wrap-pick { --tag-glow: rgba(34, 197, 94, 0.55); }
-  .tag-wrap-decider { --tag-glow: rgba(255, 193, 7, 0.6); }
+  .tag-wrap-ban {
+    --tag-glow-1: color-mix(in srgb, var(--ban-tag) 55%, transparent);
+    --tag-glow-2: color-mix(in srgb, var(--ban-tag) 25%, transparent);
+  }
+  .tag-wrap-pick {
+    --tag-glow-1: color-mix(in srgb, var(--pick-tag) 55%, transparent);
+    --tag-glow-2: color-mix(in srgb, var(--pick-tag) 25%, transparent);
+  }
+  .tag-wrap-decider {
+    --tag-glow-1: color-mix(in srgb, var(--decider-tag) 55%, transparent);
+    --tag-glow-2: color-mix(in srgb, var(--decider-tag) 25%, transparent);
+  }
 
   .tag {
     width: 100%;
@@ -1498,16 +1529,16 @@ function generateBpHtml() {
     pointer-events: none;
   }
   .tag-ban {
-    background: linear-gradient(180deg, rgba(220, 38, 38, 0.92) 0%, rgba(170, 22, 22, 0.92) 100%);
-    color: #fff;
+    background: linear-gradient(180deg, var(--ban-tag) 0%, color-mix(in srgb, var(--ban-tag), #000 25%) 100%);
+    color: var(--ban-text);
   }
   .tag-pick {
-    background: linear-gradient(180deg, rgba(34, 197, 94, 0.92) 0%, rgba(22, 150, 60, 0.92) 100%);
-    color: #fff;
+    background: linear-gradient(180deg, var(--pick-tag) 0%, color-mix(in srgb, var(--pick-tag), #000 25%) 100%);
+    color: var(--pick-text);
   }
   .tag-decider {
-    background: linear-gradient(180deg, rgba(255, 193, 7, 0.92) 0%, rgba(200, 150, 0, 0.92) 100%);
-    color: #191919;
+    background: linear-gradient(180deg, var(--decider-tag) 0%, color-mix(in srgb, var(--decider-tag), #000 25%) 100%);
+    color: var(--decider-text);
   }
 
   /* ===== 地图 Logo ===== */
@@ -1737,6 +1768,18 @@ function generateBpHtml() {
     document.documentElement.style.setProperty('--bp-dark', colors.dark);
     document.documentElement.style.setProperty('--bp-mid', colors.mid || colors.dark);
     document.documentElement.style.setProperty('--bp-light', colors.light);
+
+    var custom = d.bpCustomColors || {};
+    document.documentElement.style.setProperty('--title-start', custom.titleStart || '#fff700');
+    document.documentElement.style.setProperty('--title-end', custom.titleEnd || '#eb8100');
+    document.documentElement.style.setProperty('--team-bar-start', custom.teamBarStart || '#0c2d63');
+    document.documentElement.style.setProperty('--team-bar-end', custom.teamBarEnd || '#0a2249');
+    document.documentElement.style.setProperty('--decider-tag', custom.deciderTag || '#ffc107');
+    document.documentElement.style.setProperty('--decider-text', custom.deciderText || '#191919');
+    document.documentElement.style.setProperty('--ban-tag', custom.banTag || '#dc2626');
+    document.documentElement.style.setProperty('--ban-text', custom.banText || '#ffffff');
+    document.documentElement.style.setProperty('--pick-tag', custom.pickTag || '#22c55e');
+    document.documentElement.style.setProperty('--pick-text', custom.pickText || '#ffffff');
 
     var newKey = getSeqKey(bp);
     var hasSequence = bp.sequence && bp.sequence.length > 0;
@@ -2028,6 +2071,7 @@ ipcMain.handle('update-obs-state', (_, newState) => {
     obsState.teamRight.name = newState.teamRight.name;
   if (newState.bpStyle) obsState.bpStyle = newState.bpStyle;
   if (newState.bpColors) obsState.bpColors = newState.bpColors;
+  if (newState.bpCustomColors) obsState.bpCustomColors = { ...obsState.bpCustomColors, ...newState.bpCustomColors };
   if (typeof newState.teamLeft?.score === 'number') obsState.teamLeft.score = newState.teamLeft.score;
   if (typeof newState.teamRight?.score === 'number') obsState.teamRight.score = newState.teamRight.score;
   if (typeof newState.teamLeft?.mapScore === 'number') obsState.teamLeft.mapScore = newState.teamLeft.mapScore;
