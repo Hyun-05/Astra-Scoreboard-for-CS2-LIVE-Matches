@@ -32,4 +32,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getScoreDir: () => ipcRenderer.invoke('get-score-dir'),
   toggleScoreTxt: (enabled) => ipcRenderer.invoke('toggle-score-txt', enabled),
   getScoreTxtEnabled: () => ipcRenderer.invoke('get-score-txt-enabled'),
+  getFontsList: () => ipcRenderer.invoke('get-fonts-list'),
+  selectFontFile: () => ipcRenderer.invoke('select-font-file'),
+  getUserFontsDir: () => ipcRenderer.invoke('get-user-fonts-dir'),
+  getObsPort: () => ipcRenderer.invoke('get-obs-port'),
 });

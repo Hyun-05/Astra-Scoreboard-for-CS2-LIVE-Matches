@@ -89,7 +89,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-[11px] text-[#94A3B8]">github@Hyun-05</p>
-            <p className="text-[9px] text-[#475569]">v3.0.0 Astra</p>
+            <p className="text-[9px] text-[#475569]">v3.2.1 Astra</p>
           </div>
         </div>
       </div>

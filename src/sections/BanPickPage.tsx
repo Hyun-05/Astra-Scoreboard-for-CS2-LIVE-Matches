@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore, type BpCustomColorKey } from '@/store/appStore';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Type } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { X, GripVertical, Copy, Check, Shield, Flame, Eye, EyeOff, Play, Pause } from 'lucide-react';
 
@@ -24,9 +24,44 @@ export default function BanPickPage() {
   const bpCustomColors = useAppStore(s => s.bpCustomColors);
   const setBpCustomColors = useAppStore(s => s.setBpCustomColors);
   const resetBpCustomColors = useAppStore(s => s.resetBpCustomColors);
+
+  // --- 字体 & 标题 & 动画 ---
+  const bpFontFamily = useAppStore(s => s.bpFontFamily);
+  const bpFontFile = useAppStore(s => s.bpFontFile);
+  const bpTitle = useAppStore(s => s.bpTitle);
+  const bpAnimSpeed = useAppStore(s => s.bpAnimSpeed);
+  const setBpFontFamily = useAppStore(s => s.setBpFontFamily);
+  const setBpFontFile = useAppStore(s => s.setBpFontFile);
+  const setBpTitle = useAppStore(s => s.setBpTitle);
+  const setBpAnimSpeed = useAppStore(s => s.setBpAnimSpeed);
+
   const [copied, setCopied] = useState(false);
   const [cardsVisible, setCardsVisible] = useState(true);
   const [showColorPanel, setShowColorPanel] = useState(false);
+  const [showFontPanel, setShowFontPanel] = useState(false);
+  const [fontsList, setFontsList] = useState<{ name: string; source: string }[]>([]);
+  const [userFontsDir, setUserFontsDir] = useState('');
+  const [obsPort, setObsPort] = useState(8080);
+  // 获取字体列表 + 用户目录路径
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    api?.getFontsList?.().then((list: { name: string; source: string }[]) => setFontsList(list)).catch(() => {});
+    api?.getUserFontsDir?.().then((dir: string) => setUserFontsDir(dir)).catch(() => {});
+    api?.getObsPort?.().then((port: number) => setObsPort(port)).catch(() => {});
+  }, []);
+  const handleImportFont = async () => {
+    const api = (window as any).electronAPI;
+    const result = await api?.selectFontFile?.();
+    if (result?.success) {
+      if (result.reused) {
+      console.log('Font already imported, reused existing file');
+      }
+      const list = await api?.getFontsList?.();
+      if (list) setFontsList(list);
+      setBpFontFile(result.fileName);
+      setBpFontFamily(result.family);
+    }
+  };
 
   const isInSequence = (map: string) => bp.sequence.some(x => x.map === map);
   const isFull = bp.sequence.length >= 7;
@@ -58,7 +93,6 @@ export default function BanPickPage() {
     }
   };
 
-  // 选边切换：对方队伍打 CT 还是 T
   const handleSideChange = (map: string, side: 'ct' | 't') => {
     const item = bp.sequence.find(x => x.map === map);
     if (item && item.action === 'pick') {
@@ -67,7 +101,7 @@ export default function BanPickPage() {
   };
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText('http://127.0.0.1:8080/bp');
+    navigator.clipboard.writeText(`http://127.0.0.1:${obsPort}/bp`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -80,7 +114,6 @@ export default function BanPickPage() {
 
   const getMapImg = (map: string) => `./maps/${map}.png`;
 
-  // 颜色选择器组件
   const colorGroups: { label: string; keys: { key: BpCustomColorKey; label: string }[] }[] = [
     { label: 'Title', keys: [{ key: 'titleStart', label: 'Start' }, { key: 'titleEnd', label: 'End' }] },
     { label: 'Team Bar', keys: [{ key: 'teamBarStart', label: 'Start' }, { key: 'teamBarEnd', label: 'End' }] },
@@ -103,12 +136,11 @@ export default function BanPickPage() {
             onClick={handleCopyUrl}
             className="text-xs text-[#00F0FF] font-display mt-1 tracking-wider flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
           >
-            URL: http://127.0.0.1:8080/bp
+            URL: http://127.0.0.1:{obsPort}/bp
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         <div className="flex items-center gap-4">
-          {/* Animation Toggle */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-gray-500 uppercase tracking-wider">Animation</span>
             <div className="flex items-center gap-1 bg-white/5 rounded-lg p-0.5">
@@ -194,7 +226,6 @@ export default function BanPickPage() {
           </div>
         )}
 
-        {/* Color Customization Toggle */}
         <button
           onClick={() => setShowColorPanel(!showColorPanel)}
           className={`ml-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${
@@ -202,6 +233,16 @@ export default function BanPickPage() {
           }`}
         >
           Colors
+        </button>
+
+        <button
+          onClick={() => setShowFontPanel(!showFontPanel)}
+          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${
+            showFontPanel ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Type className="w-3 h-3" />
+          Display
         </button>
       </div>
 
@@ -227,7 +268,6 @@ export default function BanPickPage() {
               </div>
             </div>
           ))}
-          {/* Reset */}
           <button
             onClick={resetBpCustomColors}
             className="px-3 py-1.5 rounded-md text-[10px] font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1 border border-white/5 hover:border-white/10"
@@ -235,6 +275,91 @@ export default function BanPickPage() {
             <RotateCcw className="w-3 h-3" />
             Reset
           </button>
+        </div>
+      )}
+
+      {/* Display Settings Panel */}
+      {showFontPanel && (
+        <div className="flex gap-4 mb-3 p-3 bg-white/5 rounded-lg flex-wrap items-end">
+          {/* BP Title */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-gray-500 uppercase">BP Title</span>
+            <input
+              type="text"
+              value={bpTitle}
+              onChange={(e) => setBpTitle(e.target.value)}
+              className="w-40 bg-black/30 text-white text-xs rounded px-2 py-1.5 border border-white/10 focus:border-blue-500 outline-none"
+              placeholder="Ban&Pick"
+            />
+          </div>
+
+          {/* Font Family */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-gray-500 uppercase">Font Family</span>
+            <input
+              type="text"
+              value={bpFontFamily}
+              onChange={(e) => setBpFontFamily(e.target.value)}
+              className="w-32 bg-black/30 text-white text-xs rounded px-2 py-1.5 border border-white/10 focus:border-blue-500 outline-none"
+              placeholder="Quantico"
+            />
+          </div>
+
+          {/* Font File Select + 路径显示 */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] text-gray-500 uppercase">Font File</span>
+            <select
+              value={bpFontFile}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '__import__') {
+                  handleImportFont();
+                  return;
+                }
+                setBpFontFile(val);
+                const family = val.replace(/\.[^/.]+$/, '');
+                setBpFontFamily(family);
+              }}
+              className="w-48 bg-black/30 text-white text-xs rounded px-2 py-1.5 border border-white/10 focus:border-blue-500 outline-none"
+            >
+              <option value="">Select font...</option>
+              {fontsList.map((f) => (
+                <option key={f.name} value={f.name}>{f.name}</option>
+              ))}
+              <option value="__import__">+ Import Font...</option>
+            </select>
+
+            {/* 当前字体路径 */}
+            {bpFontFile && (
+              <span className="text-[9px] text-gray-500 mt-0.5 font-mono-data break-all max-w-[260px]">
+                {fontsList.find(f => f.name === bpFontFile)?.source === 'user'
+                  ? `📁 ${userFontsDir}\\${bpFontFile}`
+                  : `📦 Built-in font (packaged)`}
+              </span>
+            )}
+          </div>
+
+          {/* Anim Speed */}
+          <div className="flex flex-col gap-1 flex-1 min-w-[200px] max-w-[300px]">
+            <span className="text-[9px] text-gray-500 uppercase">
+              Anim Speed: {bpAnimSpeed}ms
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={2000}
+              step={50}
+              value={bpAnimSpeed}
+              onChange={(e) => setBpAnimSpeed(Number(e.target.value))}
+              className="w-full accent-blue-500 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+            />
+            <div className="flex justify-between text-[8px] text-gray-600">
+              <span>0ms (Instant)</span>
+              <span>Fast</span>
+              <span>Slow</span>
+              <span>2000ms</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -305,20 +430,16 @@ export default function BanPickPage() {
                 value={item}
                 className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 transition-colors"
               >
-                {/* Drag handle */}
                 <div className="cursor-grab active:cursor-grabbing text-gray-500 shrink-0">
                   <GripVertical className="w-4 h-4" />
                 </div>
 
-                {/* Order number */}
                 <span className="text-[10px] text-gray-600 font-mono-data w-5 shrink-0">
                   {index + 1}{['st','nd','rd','th','th','th','th'][index]}
                 </span>
 
-                {/* Map name */}
                 <span className="text-sm font-medium text-white w-20 shrink-0">{item.map}</span>
 
-                {/* Action: Ban / Pick / Decider */}
                 <div className="flex items-center gap-1">
                   {(['ban', 'pick', 'decider'] as BpAction[]).map(action => (
                     <button
@@ -340,7 +461,6 @@ export default function BanPickPage() {
                   ))}
                 </div>
 
-                {/* Team selector (hidden for decider) */}
                 {item.action !== 'decider' && (
                   <div className="flex items-center gap-1">
                     <button
@@ -368,11 +488,9 @@ export default function BanPickPage() {
                   </div>
                 )}
 
-                {/* Side selector: CT / T (only for Pick) */}
                 {item.action === 'pick' && (
                   <div className="flex items-center gap-1">
                     {(() => {
-                      // 对方队伍名
                       const oppName = item.team === 'left'
                         ? match.teamRight.name || 'Right'
                         : match.teamLeft.name || 'Left';
@@ -407,10 +525,8 @@ export default function BanPickPage() {
                   </div>
                 )}
 
-                {/* Spacer for decider */}
                 {item.action === 'decider' && <div className="ml-auto" />}
 
-                {/* Delete */}
                 <button
                   onClick={() => handleRemove(item.map)}
                   className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"

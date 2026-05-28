@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 
 const path = require('path');
 const http = require('http');
@@ -17,7 +17,77 @@ const Store = require('electron-store').default;
 const store = new Store();
 const PUBLIC_DIR = path.join(app.getPath('userData'), 'astra-public');
 
+// ===== 字体目录：优先安装目录，无权限则 fallback 到 %AppData% =====
 
+function getInstallDir() {
+  if (app.isPackaged) {
+    // 生产模式：.exe 所在文件夹（如 D:\Astra Director\）
+    return path.dirname(app.getPath('exe'));
+  } else {
+    // 开发模式：项目根目录（main.cjs 在 electron/ 里，.. 就是根目录）
+    return path.join(__dirname, '..');
+  }
+}
+
+function resolveFontsDir() {
+  const installFontsDir = path.join(getInstallDir(), 'fonts');
+  try {
+    if (!fs.existsSync(installFontsDir)) {
+      fs.mkdirSync(installFontsDir, { recursive: true });
+    }
+    // 测试实际写入权限（Program Files 等目录能创建但无法写入）
+    const testFile = path.join(installFontsDir, '.write_test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    console.log('>>> Fonts dir (install):', installFontsDir);
+    return installFontsDir;
+  } catch (err) {
+    const fallbackDir = path.join(app.getPath('userData'), 'fonts');
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    console.log('>>> Fonts dir (fallback):', fallbackDir);
+    return fallbackDir;
+  }
+}
+
+let userFontsDir = ''; // 在 app.whenReady() 里初始化
+function ensureUserFontsDir() {
+  if (!fs.existsSync(userFontsDir)) {
+    fs.mkdirSync(userFontsDir, { recursive: true });
+  }
+}
+
+function getAllFonts() {
+  const fonts = [];
+  const seen = new Set();
+  
+  const addFont = (name, source) => {
+    if (!seen.has(name)) {
+      seen.add(name);
+      fonts.push({ name, source });
+    }
+  };
+  
+  // 1. 内置字体
+  const builtInDir = path.join(__dirname, '../public/fonts');
+  if (fs.existsSync(builtInDir)) {
+    fs.readdirSync(builtInDir)
+      .filter(f => /\.(ttf|otf|woff2?)$/i.test(f))
+      .forEach(f => addFont(f, 'built-in'));
+  }
+  
+  // 2. 用户导入字体
+  if (fs.existsSync(userFontsDir)) {
+    fs.readdirSync(userFontsDir)
+      .filter(f => /\.(ttf|otf|woff2?)$/i.test(f))
+      .forEach(f => addFont(f, 'user'));
+  }
+  
+  return fonts;
+}
+const OBS_PORTS = [8080, 8081, 8082, 3001, 9000];
+let obsPort = 8080;
 let obsState = {
   format: 'BO3',
   showMvp: true,
@@ -43,6 +113,10 @@ let obsState = {
     pickTag: '#22c55e',
     pickText: '#ffffff',
   },
+  bpFontFamily: 'Quantico',
+  bpFontFile: 'quantico-bold.ttf',
+  bpTitle: 'Ban&Pick',
+  bpAnimSpeed: 500,
   winner: null,
   gsiConnected: false,
   mapName: '',
@@ -356,24 +430,37 @@ function startGsiServer() {
     }
   }, 5000);
 }
+function getFontFormat(fileName) {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'woff2': return 'woff2';
+    case 'woff':  return 'woff';
+    case 'otf':   return 'opentype';
+    case 'ttf':   return 'truetype';
+    default:      return 'truetype';
+  }
+}
+function startObsServer(ports = OBS_PORTS, index = 0) {
+  if (index >= ports.length) {
+    console.error('>>> All OBS ports failed! Please check if ports are blocked or in use.');
+    return;
+  }
 
-function startObsServer() {
-  const obsServer = http.createServer((req, res) => {
+  const port = ports[index];
+  const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
 
     // ========== 新增：支持 /maps/bp/xxx.png 和 /maps/logo/xxx.png ==========
     const mapPathMatch = req.url.match(/^\/maps\/(.+\.(png|jpg|jpeg|webp|gif))$/i);
     if (mapPathMatch) {
-      const relativePath = mapPathMatch[1]; // e.g., "bp/Ancient.png" or "logo/Ancient.png"
-
+      const relativePath = mapPathMatch[1];
       const possiblePaths = [
-        path.join(PUBLIC_DIR, 'maps', relativePath),                    // userData/astra-public/maps/bp/xxx.png
-        path.join(__dirname, '../public/maps', relativePath),           // 开发时
-        path.join(__dirname, '../dist/maps', relativePath),             // 构建后
-        path.join(process.resourcesPath, 'public/maps', relativePath),  // 打包后 resources
+        path.join(PUBLIC_DIR, 'maps', relativePath),
+        path.join(__dirname, '../public/maps', relativePath),
+        path.join(__dirname, '../dist/maps', relativePath),
+        path.join(process.resourcesPath, 'public/maps', relativePath),
       ];
-
       for (const imgPath of possiblePaths) {
         if (fs.existsSync(imgPath)) {
           const ext = path.extname(imgPath).toLowerCase();
@@ -394,7 +481,6 @@ function startObsServer() {
     if (req.url.match(/^\/[^\/]+\.(png|jpg|jpeg|webp|gif)$/i)) {
       const fileName = path.basename(req.url);
       const bgPath = path.join(PUBLIC_DIR, fileName);
-
       if (fs.existsSync(bgPath)) {
         const ext = path.extname(bgPath).toLowerCase();
         const mime = ext === '.png' ? 'image/png'
@@ -407,12 +493,38 @@ function startObsServer() {
         res.writeHead(404); res.end();
       }
       return;
-    }
-
-    // ========== 保留你现有的其他路由 ==========
-    else if (req.url === '/api/state') {
+    } else if (req.url === '/api/fonts') {
+      const fonts = getAllFonts();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(fonts));
+      return;
+    } else if (req.url === '/api/state') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(obsState));
+    } else if (req.url.startsWith('/fonts/')) {
+      const fileName = path.basename(req.url);
+      let filePath = path.join(userFontsDir, fileName);
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(__dirname, '../public/fonts', fileName);
+      }
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(fileName).toLowerCase();
+        const mime = {
+          '.woff2': 'font/woff2',
+          '.woff': 'font/woff',
+          '.otf': 'font/otf',
+          '.ttf': 'font/ttf'
+        }[ext] || 'application/octet-stream';
+        res.writeHead(200, {
+          'Content-Type': mime,
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(fs.readFileSync(filePath));
+      } else {
+        res.writeHead(404);
+        res.end('Font not found');
+      }
+      return;
     } else if (req.url === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(generateObsHtml());
@@ -422,41 +534,28 @@ function startObsServer() {
     } else if (req.url === '/name1' || req.url === '/name2') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(generateNameHtml());
-    } else if (req.url.match(/^\/fonts\/.+\.(woff2|woff|ttf|otf)$/i)) {
-      const relativePath = req.url.replace(/^\/fonts\//, '');
-      const possiblePaths = [
-        path.join(__dirname, '../public/fonts', relativePath),
-        path.join(__dirname, '../dist/fonts', relativePath),
-        path.join(process.resourcesPath, 'public/fonts', relativePath),
-      ];
-      for (const fontPath of possiblePaths) {
-        if (fs.existsSync(fontPath)) {
-          const ext = path.extname(fontPath).toLowerCase();
-          const mime = ext === '.woff2' ? 'font/woff2'
-                    : ext === '.woff' ? 'font/woff'
-                    : ext === '.ttf' ? 'font/ttf'
-                    : 'font/opentype';
-          res.writeHead(200, { 'Content-Type': mime });
-          res.end(fs.readFileSync(fontPath));
-          return;
-        }
-      }
-    res.writeHead(404); res.end();
-  }else {
+    } else {
       res.writeHead(404);
       res.end();
     }
   });
 
-  obsServer.on('error', (err) => {
-    console.error('OBS server error:', err);
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`>>> Port ${port} in use, trying next...`);
+      server.close();
+      startObsServer(ports, index + 1);
+    } else {
+      console.error('OBS server error:', err);
+    }
   });
 
-  obsServer.listen(8080, '127.0.0.1', () => {
-    console.log('OBS Browser Source: http://127.0.0.1:8080');
+  server.listen(port, '127.0.0.1', () => {
+    obsPort = port;
+    obsState.obsPort = port;
+    console.log(`OBS Browser Source: http://127.0.0.1:${port}`);
   });
 }
-
 // ==================== OBS 网页 ====================
 function generateObsHtml() {
   return `<!DOCTYPE html>
@@ -842,10 +941,10 @@ function generateObsHtml() {
   
   async function tick() {
     try {
-      const r = await fetch('http://127.0.0.1:8080/api/state');
-      const d = await r.json();
+      const r = await fetch('http://127.0.0.1:${obsPort}/api/state');      const d = await r.json();
       render(d);
-    } catch(e) {
+    } 
+      catch(e) {
       $('top-panel').style.display = 'none';
       $('boards').innerHTML = '<div class="offline">Waiting for Scoreboard...</div>';
     }
@@ -878,7 +977,7 @@ function generateObsHtml() {
     const ctImg = document.querySelector('.card-bg-img-ct');
     if (ctImg) {
       if (d.ctBgVisible !== false && d.ctBgName) {
-        ctImg.src = 'http://127.0.0.1:8080/' + d.ctBgName;
+        ctImg.src = 'http://127.0.0.1:${obsPort}/' + d.ctBgName;
         ctImg.style.display = 'block';
       } else {
         ctImg.style.display = 'none';
@@ -887,7 +986,7 @@ function generateObsHtml() {
     const tImg = document.querySelector('.card-bg-img-t');
     if (tImg) {
       if (d.tBgVisible !== false && d.tBgName) {
-        tImg.src = 'http://127.0.0.1:8080/' + d.tBgName;
+        tImg.src = 'http://127.0.0.1:${obsPort}/' + d.tBgName;
         tImg.style.display = 'block';
       } else {
         tImg.style.display = 'none';
@@ -1047,23 +1146,29 @@ function generateNameHtml() {
 }
 
 function generateBpHtml() {
+  const fontFamily = obsState.bpFontFamily || 'Quantico';
+  const fontFile = obsState.bpFontFile || 'quantico-bold.ttf';
+  const title = obsState.bpTitle || 'Ban&Pick';
+  const animSpeed = obsState.bpAnimSpeed ?? 500;
+  const fontFormat = getFontFormat(fontFile);
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <style>
   @font-face {
-    font-family: 'Quantico';
+    font-family: '${fontFamily}';
     font-style: normal;
     font-weight: 700;
     font-display: swap;
-    src: url('/fonts/quantico-bold.ttf') format('truetype');
+    src: url('/fonts/${fontFile}') format('${fontFormat}');
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: 'Quantico', sans-serif;
+    font-family: '${fontFamily}', sans-serif;
     font-weight: 700;
     width: 1920px; height: 1080px;
     display: flex;
@@ -1617,7 +1722,7 @@ function generateBpHtml() {
     pointer-events: none;
   }
 
-  /* ===== 入场动画：严格串行，visibility 确保动画前完全不渲染 ===== */
+  /* ===== 入场动画 ===== */
   .card-pending {
     visibility: hidden;
     opacity: 0;
@@ -1640,8 +1745,8 @@ function generateBpHtml() {
 </head>
 <body>
   <div class="title-box">
-    <div class="title-stroke">Ban&Pick</div>
-    <div class="title-fill">Ban&Pick</div>
+    <div class="title-stroke" id="title-stroke">${title}</div>
+    <div class="title-fill" id="title-fill">${title}</div>
   </div>
 
   <div class="maps-row" id="maps-row"></div>
@@ -1657,7 +1762,13 @@ function generateBpHtml() {
       fillEl.style.fontSize = size + 'px';
     }
   }
-
+  function getFontFormat(fileName) {
+    var ext = fileName.split('.').pop().toLowerCase();
+    if (ext === 'woff2') return 'woff2';
+    if (ext === 'woff') return 'woff';
+    if (ext === 'otf') return 'opentype';
+    return 'truetype';
+  }
   function getSeqKey(bp) {
     if (!bp || !bp.sequence) return '';
     return bp.sequence.map(function(s) {
@@ -1757,6 +1868,30 @@ function generateBpHtml() {
     var row = document.getElementById('maps-row');
     if (!row) return;
 
+    // 动态字体加载
+    if (d.bpFontFamily && d.bpFontFile) {
+      var existingFont = document.getElementById('dynamic-font');
+      var fontFormat = getFontFormat(d.bpFontFile);
+      var fontCss = "@font-face { font-family: '" + d.bpFontFamily + "'; src: url('/fonts/" + d.bpFontFile + "') format('" + fontFormat + "'); font-weight: 700; }";  // ← 改这里
+      if (!existingFont) {
+        var styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-font';
+        styleEl.textContent = fontCss;
+        document.head.appendChild(styleEl);
+      } else if (existingFont.textContent !== fontCss) {
+        existingFont.textContent = fontCss;
+      }
+      document.body.style.fontFamily = "'" + d.bpFontFamily + "', sans-serif";
+    }
+
+    // 更新标题
+    if (d.bpTitle !== undefined) {
+      var titleStroke = document.getElementById('title-stroke');
+      var titleFill = document.getElementById('title-fill');
+      if (titleStroke) titleStroke.textContent = d.bpTitle;
+      if (titleFill) titleFill.textContent = d.bpTitle;
+    }
+
     var bp = d.bp || { sequence: [] };
     var leftName = d.teamLeft && d.teamLeft.name || 'CT TEAM';
     var rightName = d.teamRight && d.teamRight.name || 'T TEAM';
@@ -1764,6 +1899,7 @@ function generateBpHtml() {
     var colors = d.bpColors || { dark: '#292727', mid: '#6b4226', light: '#b26500' };
     var animEnabled = d.bpAnimEnabled === true;
     var cardsVisible = d.bpCardsVisible !== false;
+    var animSpeed = (typeof d.bpAnimSpeed === 'number') ? d.bpAnimSpeed : 500;
 
     document.documentElement.style.setProperty('--bp-dark', colors.dark);
     document.documentElement.style.setProperty('--bp-mid', colors.mid || colors.dark);
@@ -1830,7 +1966,7 @@ function generateBpHtml() {
             setTimeout(function() {
               card.classList.remove('card-pending');
               card.classList.add('card-entering');
-            }, index * 500);
+            }, index * animSpeed);
           });
         }
       }
@@ -1881,7 +2017,6 @@ function generateBpHtml() {
 </body>
 </html>`;
 }
-
 function createWindow() {
   mainWindow = new BrowserWindow({
   width: 1360,
@@ -1930,6 +2065,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  userFontsDir = resolveFontsDir(); 
   if (!fs.existsSync(PUBLIC_DIR)) {
     fs.mkdirSync(PUBLIC_DIR, { recursive: true });
   }
@@ -1950,11 +2086,15 @@ app.whenReady().then(() => {
       }
     }
   });
+  obsState.bpAnimSpeed = store.get('bpAnimSpeed', 500);
   obsState.ctBgVisible = store.get('ctBgVisible', false);
   obsState.tBgVisible = store.get('tBgVisible', false);
   obsState.ctBgName = store.get('ctBgName', 'ct_bg.png');
   obsState.tBgName = store.get('tBgName', 't_bg.png');
   obsState.bgImgOpacity = store.get('bgImgOpacity', 0.3);
+  obsState.bpTitle = store.get('bpTitle', 'Ban&Pick');
+  obsState.bpFontFamily = store.get('bpFontFamily', 'Quantico');
+  obsState.bpFontFile = store.get('bpFontFile', 'quantico-bold.ttf');
   const savedColors = store.get('colors');
   if (savedColors) obsState.colors = savedColors;
   const scoreDir = store.get('scoreTxtDir', path.join(app.getPath('documents'), 'Astra Director', 'scores'));
@@ -2055,7 +2195,7 @@ ipcMain.handle('select-score-dir', async () => {
 ipcMain.handle('get-score-dir', () => {
   return store.get('scoreTxtDir', path.join(app.getPath('userData'), 'scores'));
 });
-
+ipcMain.handle('get-user-fonts-dir', () => userFontsDir);
 ipcMain.handle('update-obs-state', (_, newState) => {
   const oldLeftScore = obsState.teamLeft.score;
   const oldRightScore = obsState.teamRight.score;
@@ -2072,6 +2212,22 @@ ipcMain.handle('update-obs-state', (_, newState) => {
   if (newState.bpStyle) obsState.bpStyle = newState.bpStyle;
   if (newState.bpColors) obsState.bpColors = newState.bpColors;
   if (newState.bpCustomColors) obsState.bpCustomColors = { ...obsState.bpCustomColors, ...newState.bpCustomColors };
+  if (newState.bpFontFamily) {
+    obsState.bpFontFamily = newState.bpFontFamily;
+    store.set('bpFontFamily', newState.bpFontFamily);
+  }
+  if (newState.bpFontFile) {
+    obsState.bpFontFile = newState.bpFontFile;
+    store.set('bpFontFile', newState.bpFontFile);
+  }
+  if (newState.bpTitle !== undefined) {
+    obsState.bpTitle = newState.bpTitle;
+    store.set('bpTitle', newState.bpTitle);
+  }
+  if (typeof newState.bpAnimSpeed === 'number') {
+    obsState.bpAnimSpeed = newState.bpAnimSpeed;
+    store.set('bpAnimSpeed', newState.bpAnimSpeed);
+  }
   if (typeof newState.teamLeft?.score === 'number') obsState.teamLeft.score = newState.teamLeft.score;
   if (typeof newState.teamRight?.score === 'number') obsState.teamRight.score = newState.teamRight.score;
   if (typeof newState.teamLeft?.mapScore === 'number') obsState.teamLeft.mapScore = newState.teamLeft.mapScore;
@@ -2113,7 +2269,7 @@ ipcMain.handle('update-obs-state', (_, newState) => {
   }
   return true;
 });
-
+ipcMain.handle('get-obs-port', () => obsPort);
 ipcMain.handle('select-bg-image', async (event, team) => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -2166,6 +2322,48 @@ ipcMain.handle('get-bg-config', () => {
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+ipcMain.handle('get-fonts-list', () => {
+  ensureUserFontsDir();
+  return getAllFonts();
+});
+ipcMain.handle('select-font-file', async () => {
+  ensureUserFontsDir();
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Font Files', extensions: ['ttf', 'otf', 'woff', 'woff2'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    title: 'Select Font File'
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false, message: 'Cancelled' };
+  }
+
+  const sourcePath = result.filePaths[0];
+  const fileName = path.basename(sourcePath);
+  const destPath = path.join(userFontsDir, fileName);
+  const family = fileName.replace(/\.[^/.]+$/, '');
+
+  // ===== 防重复：如果用户目录已有同名文件，直接复用 =====
+  if (fs.existsSync(destPath)) {
+    // 可选：进一步比较文件大小确认是同一个文件
+    const srcStat = fs.statSync(sourcePath);
+    const dstStat = fs.statSync(destPath);
+    if (srcStat.size === dstStat.size) {
+      return { success: true, fileName, family, reused: true };
+    }
+    // 如果同名但大小不同（罕见），覆盖
+  }
+
+  try {
+    fs.copyFileSync(sourcePath, destPath);
+    return { success: true, fileName, family, reused: false };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
 ipcMain.handle('minimize-window', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.handle('maximize-window', () => {
   if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();

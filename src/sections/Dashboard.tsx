@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useAppStore } from '@/store/appStore';
 import Scoreboard from '@/components/Scoreboard';
 import PlayerTable from '@/components/PlayerTable';
@@ -14,13 +15,19 @@ export default function Dashboard() {
   const resetMatch = useAppStore(s => s.resetMatch);
   const match = useAppStore(s => s.match);
 
+  const [obsPort, setObsPort] = useState(8080);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    api?.getObsPort?.().then((port: number) => setObsPort(port)).catch(() => {});
+  }, []);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      // 关键修改：h-full 撑满父容器，flex-col 纵向排列，overflow-hidden 禁止整体滚动
       className="h-full flex flex-col overflow-hidden p-6 lg:p-8"
     >
       {/* ========== 顶部：Header + 大比分（固定，不滚动）========== */}
@@ -28,7 +35,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-wide">Scoreboard</h1>
           <p className="text-xs text-[#00F0FF] font-display mt-1 tracking-wider">
-            URL: http://127.0.0.1:8080/
+            URL: http://127.0.0.1:{obsPort}
           </p>
         </div>
         <MatchConfig />

@@ -16,12 +16,16 @@ export default function DataPanel() {
   const addLog = useAppStore(s => s.addLog);
   const [copied, setCopied] = useState(false);
   const syncBgConfig = useAppStore(s => s.syncBgConfig);
-  
+  const [obsPort, setObsPort] = useState(8080);
+
+    useEffect(() => {
+    const api = (window as any).electronAPI;
+    api?.getObsPort?.().then((port: number) => setObsPort(port)).catch(() => {});
+  }, []);
   // ========== 新增：GSI 自动配置状态 ==========
   const [gsiStatus, setGsiStatus] = useState('');
 
-  const overlayUrl = 'http://127.0.0.1:8080';
-
+const overlayUrl = `http://127.0.0.1:${obsPort}`;
   const handleCopy = () => {
     navigator.clipboard.writeText(overlayUrl).catch(() => {});
     setCopied(true);
