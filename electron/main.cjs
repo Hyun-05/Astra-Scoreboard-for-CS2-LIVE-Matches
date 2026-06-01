@@ -18,13 +18,16 @@ const store = new Store();
 const PUBLIC_DIR = path.join(app.getPath('userData'), 'astra-public');
 
 // ===== 字体目录：优先安装目录，无权限则 fallback 到 %AppData% =====
-
 function getInstallDir() {
   if (app.isPackaged) {
-    // 生产模式：.exe 所在文件夹（如 D:\Astra Director\）
+    // 便携版：electron-builder 会设置 PORTABLE_EXECUTABLE_DIR 指向原始 .exe 所在文件夹
+    if (process.env.PORTABLE_EXECUTABLE_DIR) {
+      return process.env.PORTABLE_EXECUTABLE_DIR;
+    }
+    // 安装版：返回 .exe 所在文件夹（如 D:\Astra Director\）
     return path.dirname(app.getPath('exe'));
   } else {
-    // 开发模式：项目根目录（main.cjs 在 electron/ 里，.. 就是根目录）
+    // 开发模式
     return path.join(__dirname, '..');
   }
 }
